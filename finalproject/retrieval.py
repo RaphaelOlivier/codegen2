@@ -96,7 +96,7 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
 
 
 class Gram:
-    def __init__(self, entry_index, action, act_ids, score):
+    def __init__(self, entry_index, action, act_ids):
         self.entry_index = entry_index
         self.action_type = ACTION_NAMES[action.act_type]
         self.rule_id = None

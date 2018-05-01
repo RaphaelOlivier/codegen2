@@ -251,6 +251,7 @@ class RetrievalModel(Model):
 
     def decode_with_retrieval(self, example, grammar, terminal_vocab, ngrams, beam_size, max_time_step, log=False):
         # beam search decoding with ngram retrieval
+        ngrams_searcher = NGramSearcher(ngrams)
         retrieval_factor = 0.01
         print "Wesh wesh"
         eos = 1
@@ -312,8 +313,10 @@ class RetrievalModel(Model):
             decoder_next_state, decoder_next_cell, \
                 rule_prob, gen_action_prob, vocab_prob, copy_prob = self.decoder_func_next_step(
                     *inputs)
+
             rule_prob, vocab_prob, copy_prob = update_probs(
-                rule_prob, vocab_prob, copy_prob, ngrams)
+                rule_prob, vocab_prob, copy_prob, hyp_samples, ngrams_searcher)
+
             new_hyp_samples = []
             cut_off_k = beam_size
             score_heap = []
@@ -471,3 +474,35 @@ class RetrievalModel(Model):
         completed_hyps = sorted(completed_hyps, key=lambda x: x.score, reverse=True)
 
         return completed_hyps
+
+
+class Hyp_ng(Hyp):
+    def __init__(self, *args):
+        super(Hyp_ng, self).__init__(*args)
+        if isinstance(args[0], Hyp):
+            Hyp.hist_ng = args[0].ng
+        else:
+            Hyp.hist_ng = []
+
+    def update_ngrams(self, new_ngram):
+        hist_ng.append(new_ngram)
+
+    def get_ngrams(self):
+        t = self.get_action_parent_t()
+        return hist_ng[t]
+
+
+def update_probs(rule_prob, vocab_prob, copy_prob, hyp_samples, ngrams_searcher):
+    retrieval_factor = 0.01
+    for k, hyp in enumerate(hyp_samples):
+        ngram_keys = hyp.get_ngrams()
+        for value, score, flag in ngrams_searcher(ngram_keys):
+            if flag == "APPLY_RULE":
+                rule_prob[k, value] += retrieval_factor*score
+            elif flag == "GEN_TOKEN" or flag == "GEN_COPY_TOKEN":
+                vocab_prob[k, value] += retrieval_factor*score
+            else:
+                assert flag == "COPY_TOKEN"
+                copy_prob[k, value] += retrieval_factor*score
+
+    return rule_prob, vocab_prob, copy_prob
