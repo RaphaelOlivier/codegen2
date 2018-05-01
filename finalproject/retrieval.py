@@ -50,16 +50,19 @@ def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, sim
     node = aligned_entry.parse_tree
     actions = aligned_entry.actions
     alignments = alter_for_copy(np.copy(aligned_entry.alignments), s2s_alignment_dict)
-    assert(len(alignments) == len(actions))
+    # print len(alignments), len(actions)
+    # print aligned_entry.query
     final_timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, unedited_words, simi_score,
                                         ngrams, current_ngrams, current_ngram_depth, init_timestep)
-    # print(final_timestep, len(actions)-1)  # not including the eos action
-    assert(final_timestep == len(actions))
+    # print(final_timestep, len(actions))
+    #assert(final_timestep == len(actions))
     return ngrams
 
 
 def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, unedited_words, simi_score, ngrams, current_ngrams, current_ngram_depth, timestep):
     # test alignment
+    if timestep >= min(len(act_sequence), len(actions)):
+        return timestep
     target_w = Gram(entry_index, actions[timestep], act_sequence[timestep], simi_score)
     source_w = alignments[timestep]
     if source_w in unedited_words.values():
@@ -71,6 +74,11 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
         current_ngram_depth = 0
         for i in range(1, MAX_N_GRAMS+1):
             current_ngrams[i] = []
+    # print timestep
+    # print current_ngram_depth
+    # for i in range(current_ngram_depth, 0, -1):
+    #    print i, len(current_ngrams[i])
+    #    assert len(current_ngrams[i]) == i
     timestep += 1
     if isinstance(node, ASTNode):
         if node.children:
@@ -79,10 +87,11 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
                                               copy.deepcopy(current_ngrams), current_ngram_depth, timestep)
         elif node.value is not None:
             terminal_tokens = get_terminal_tokens(str(node.value))
-            for tk in terminal_tokens:
-                timestep = aux_collect_ngrams(entry_index, actions, act_sequence, tk, alignments, unedited_words, simi_score, ngrams,
-                                              current_ngrams, current_ngram_depth, timestep)
-
+            timestep = aux_collect_ngrams(entry_index, actions, act_sequence, terminal_tokens, alignments, unedited_words, simi_score, ngrams,
+                                          copy.deepcopy(current_ngrams), current_ngram_depth, timestep)
+    elif len(node) > 1:
+        timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node[1:], alignments, unedited_words, simi_score, ngrams,
+                                      copy.deepcopy(current_ngrams), current_ngram_depth, timestep)
     return timestep
 
 
@@ -169,17 +178,20 @@ def retrieve_translation_pieces(dataset, input_sentence):
 
         for i in range(1, MAX_N_GRAMS+1):
             all_ngrams[i] += ngrams[i]
-    print[len(q) for q in all_ngrams[1:]]
+    # print[len(q) for q in all_ngrams[1:]]
     max_ngrams = [[] for k in range(MAX_N_GRAMS+1)]
     for i in range(1, MAX_N_GRAMS+1):
         for ng in all_ngrams[i]:
             insert_ngram(ng, max_ngrams[i])
-    print[len(q) for q in max_ngrams[1:]]
-    print(input_sentence)
+    # print[len(q) for q in max_ngrams[1:]]
+    # print(input_sentence)
     return max_ngrams
 
 
 if __name__ == "__main__":
     train_data, dev_data, test_data = deserialize_from_file('../../files/aligned_hs.bin')
-    input_sentence = test_data.examples[10].query
-    retrieve_translation_pieces(train_data, input_sentence)
+    for ex in test_data.examples:
+        input_sentence = ex.query
+        l = retrieve_translation_pieces(train_data, input_sentence)
+        print len(l[4])
+        del l
