@@ -22,9 +22,11 @@ class PointerNet(Layer):
     def __init__(self, name='PointerNet'):
         super(PointerNet, self).__init__()
 
-        self.dense1_input = Dense(config.encoder_hidden_dim, config.ptrnet_hidden_dim, activation='linear', name='Dense1_input')
+        self.dense1_input = Dense(config.encoder_hidden_dim,
+                                  config.ptrnet_hidden_dim, activation='linear', name='Dense1_input')
 
-        self.dense1_h = Dense(config.decoder_hidden_dim + config.encoder_hidden_dim, config.ptrnet_hidden_dim, activation='linear', name='Dense1_h')
+        self.dense1_h = Dense(config.decoder_hidden_dim + config.encoder_hidden_dim,
+                              config.ptrnet_hidden_dim, activation='linear', name='Dense1_h')
 
         self.dense2 = Dense(config.ptrnet_hidden_dim, 1, activation='linear', name='Dense2')
 
@@ -50,6 +52,7 @@ class PointerNet(Layer):
 
         return scores
 
+
 class Hyp:
     def __init__(self, *args):
         if isinstance(args[0], Hyp):
@@ -65,7 +68,7 @@ class Hyp:
             grammar = args[0]
             self.grammar = grammar
             self.tree = DecodeTree(grammar.root_node.type)
-            self.t=-1
+            self.t = -1
             self.hist_h = []
             self.log = ''
             self.has_grammar_error = False
@@ -192,10 +195,12 @@ class Hyp:
     #     else:
     #         return None
 
+
 class CondAttLSTM(Layer):
     """
     Conditional LSTM with Attention
     """
+
     def __init__(self, input_dim, output_dim,
                  context_dim, att_hidden_dim,
                  init='glorot_uniform', inner_init='orthogonal', forget_bias_init='one',
@@ -430,10 +435,15 @@ class CondAttLSTM(Layer):
 
         ##### attention over history #####
 
-        i_t = self.inner_activation(xi_t + T.dot(h_tm1 * b_u[0], self.U_i) + T.dot(ctx_vec, self.C_i) + T.dot(h_ctx_vec, self.H_i))
-        f_t = self.inner_activation(xf_t + T.dot(h_tm1 * b_u[1], self.U_f) + T.dot(ctx_vec, self.C_f) + T.dot(h_ctx_vec, self.H_f))
-        c_t = f_t * c_tm1 + i_t * self.activation(xc_t + T.dot(h_tm1 * b_u[2], self.U_c) + T.dot(ctx_vec, self.C_c) + T.dot(h_ctx_vec, self.H_c))
-        o_t = self.inner_activation(xo_t + T.dot(h_tm1 * b_u[3], self.U_o) + T.dot(ctx_vec, self.C_o) + T.dot(h_ctx_vec, self.H_o))
+        i_t = self.inner_activation(
+            xi_t + T.dot(h_tm1 * b_u[0], self.U_i) + T.dot(ctx_vec, self.C_i) + T.dot(h_ctx_vec, self.H_i))
+        f_t = self.inner_activation(
+            xf_t + T.dot(h_tm1 * b_u[1], self.U_f) + T.dot(ctx_vec, self.C_f) + T.dot(h_ctx_vec, self.H_f))
+        c_t = f_t * c_tm1 + i_t * \
+            self.activation(xc_t + T.dot(h_tm1 * b_u[2], self.U_c) +
+                            T.dot(ctx_vec, self.C_c) + T.dot(h_ctx_vec, self.H_c))
+        o_t = self.inner_activation(
+            xo_t + T.dot(h_tm1 * b_u[3], self.U_o) + T.dot(ctx_vec, self.C_o) + T.dot(h_ctx_vec, self.H_o))
         h_t = o_t * self.activation(c_t)
 
         h_t = (1 - mask_t) * h_tm1 + mask_t * h_t
@@ -506,7 +516,8 @@ class CondAttLSTM(Layer):
             outputs_info=[
                 first_state,  # for h
                 first_cell,  # for cell
-                None, # T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.context_dim), 1),  # for ctx vector
+                # T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.context_dim), 1),  # for ctx vector
+                None,
                 hist_h,  # for hist_h
             ],
             non_sequences=[

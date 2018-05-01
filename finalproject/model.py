@@ -27,11 +27,13 @@ from components import Hyp, PointerNet, CondAttLSTM
 
 sys.setrecursionlimit(50000)
 
-class Model:
+
+class Model(object):
     def __init__(self):
         # self.node_embedding = Embedding(config.node_num, config.node_embed_dim, name='node_embed')
 
-        self.query_embedding = Embedding(config.source_vocab_size, config.word_embed_dim, name='query_embed')
+        self.query_embedding = Embedding(config.source_vocab_size,
+                                         config.word_embed_dim, name='query_embed')
 
         if config.encoder == 'bilstm':
             self.query_encoder_lstm = BiLSTM(config.word_embed_dim, config.encoder_hidden_dim / 2, return_sequences=True,
@@ -46,28 +48,33 @@ class Model:
 
         self.src_ptr_net = PointerNet()
 
-        self.terminal_gen_softmax = Dense(config.decoder_hidden_dim, 2, activation='softmax', name='terminal_gen_softmax')
+        self.terminal_gen_softmax = Dense(
+            config.decoder_hidden_dim, 2, activation='softmax', name='terminal_gen_softmax')
 
-        self.rule_embedding_W = initializations.get('normal')((config.rule_num, config.rule_embed_dim), name='rule_embedding_W', scale=0.1)
+        self.rule_embedding_W = initializations.get('normal')(
+            (config.rule_num, config.rule_embed_dim), name='rule_embedding_W', scale=0.1)
         self.rule_embedding_b = shared_zeros(config.rule_num, name='rule_embedding_b')
 
-        self.node_embedding = initializations.get('normal')((config.node_num, config.node_embed_dim), name='node_embed', scale=0.1)
+        self.node_embedding = initializations.get('normal')(
+            (config.node_num, config.node_embed_dim), name='node_embed', scale=0.1)
 
-        self.vocab_embedding_W = initializations.get('normal')((config.target_vocab_size, config.rule_embed_dim), name='vocab_embedding_W', scale=0.1)
+        self.vocab_embedding_W = initializations.get('normal')(
+            (config.target_vocab_size, config.rule_embed_dim), name='vocab_embedding_W', scale=0.1)
         self.vocab_embedding_b = shared_zeros(config.target_vocab_size, name='vocab_embedding_b')
 
         # decoder_hidden_dim -> action embed
-        self.decoder_hidden_state_W_rule = Dense(config.decoder_hidden_dim, config.rule_embed_dim, name='decoder_hidden_state_W_rule')
+        self.decoder_hidden_state_W_rule = Dense(
+            config.decoder_hidden_dim, config.rule_embed_dim, name='decoder_hidden_state_W_rule')
 
         # decoder_hidden_dim -> action embed
-        self.decoder_hidden_state_W_token= Dense(config.decoder_hidden_dim + config.encoder_hidden_dim, config.rule_embed_dim,
-                                                 name='decoder_hidden_state_W_token')
+        self.decoder_hidden_state_W_token = Dense(config.decoder_hidden_dim + config.encoder_hidden_dim, config.rule_embed_dim,
+                                                  name='decoder_hidden_state_W_token')
 
         # self.rule_encoder_lstm.params
         self.params = self.query_embedding.params + self.query_encoder_lstm.params + \
-                      self.decoder_lstm.params + self.src_ptr_net.params + self.terminal_gen_softmax.params + \
-                      [self.rule_embedding_W, self.rule_embedding_b, self.node_embedding, self.vocab_embedding_W, self.vocab_embedding_b] + \
-                      self.decoder_hidden_state_W_rule.params + self.decoder_hidden_state_W_token.params
+            self.decoder_lstm.params + self.src_ptr_net.params + self.terminal_gen_softmax.params + \
+            [self.rule_embedding_W, self.rule_embedding_b, self.node_embedding, self.vocab_embedding_W, self.vocab_embedding_b] + \
+            self.decoder_hidden_state_W_rule.params + self.decoder_hidden_state_W_token.params
 
         self.srng = RandomStreams()
 
@@ -96,7 +103,8 @@ class Model:
 
         # (batch_size, max_query_length, query_token_embed_dim)
         # (batch_size, max_query_length)
-        query_token_embed, query_token_embed_mask = self.query_embedding(query_tokens, mask_zero=True)
+        query_token_embed, query_token_embed_mask = self.query_embedding(
+            query_tokens, mask_zero=True)
 
         # if WORD_DROPOUT > 0:
         #     logging.info('used word dropout for source, p = %f', WORD_DROPOUT)
@@ -125,7 +133,8 @@ class Model:
             tgt_par_rule_embed *= 0.
 
         # (batch_size, max_example_action_num, action_embed_dim + symbol_embed_dim + action_embed_dim)
-        decoder_input = T.concatenate([tgt_action_seq_embed_tm1, tgt_node_embed, tgt_par_rule_embed], axis=-1)
+        decoder_input = T.concatenate(
+            [tgt_action_seq_embed_tm1, tgt_node_embed, tgt_par_rule_embed], axis=-1)
 
         # (batch_size, max_query_length, query_embed_dim)
         query_embed = self.query_encoder_lstm(query_token_embed, mask=query_token_embed_mask,
@@ -133,7 +142,7 @@ class Model:
 
         # (batch_size, max_example_action_num)
         tgt_action_seq_mask = T.any(tgt_action_seq_type, axis=-1)
-        
+
         # decoder_hidden_states: (batch_size, max_example_action_num, lstm_hidden_state)
         # ctx_vectors: (batch_size, max_example_action_num, encoder_hidden_dim)
         decoder_hidden_states, _, ctx_vectors = self.decoder_lstm(decoder_input,
@@ -154,16 +163,19 @@ class Model:
         # ====================================================
 
         decoder_hidden_state_trans_rule = self.decoder_hidden_state_W_rule(decoder_hidden_states)
-        decoder_hidden_state_trans_token = self.decoder_hidden_state_W_token(T.concatenate([decoder_hidden_states, ctx_vectors], axis=-1))
+        decoder_hidden_state_trans_token = self.decoder_hidden_state_W_token(
+            T.concatenate([decoder_hidden_states, ctx_vectors], axis=-1))
 
         # (batch_size, max_example_action_num, rule_num)
-        rule_predict = softmax(T.dot(decoder_hidden_state_trans_rule, T.transpose(self.rule_embedding_W)) + self.rule_embedding_b)
+        rule_predict = softmax(T.dot(decoder_hidden_state_trans_rule,
+                                     T.transpose(self.rule_embedding_W)) + self.rule_embedding_b)
 
         # (batch_size, max_example_action_num, 2)
         terminal_gen_action_prob = self.terminal_gen_softmax(decoder_hidden_states)
 
         # (batch_size, max_example_action_num, target_vocab_size)
-        vocab_predict = softmax(T.dot(decoder_hidden_state_trans_token, T.transpose(self.vocab_embedding_W)) + self.vocab_embedding_b)
+        vocab_predict = softmax(T.dot(decoder_hidden_state_trans_token, T.transpose(
+            self.vocab_embedding_W)) + self.vocab_embedding_b)
 
         # (batch_size, max_example_action_num, lstm_hidden_state + encoder_hidden_dim)
         ptr_net_decoder_state = T.concatenate([decoder_hidden_states, ctx_vectors], axis=-1)
@@ -186,14 +198,14 @@ class Model:
                                   T.shape_padleft(T.arange(max_example_action_num)),
                                   tgt_action_seq[:, :, 2]]
 
-
         # (batch_size, max_example_action_num)
         tgt_prob = tgt_action_seq_type[:, :, 0] * rule_tgt_prob + \
-                   tgt_action_seq_type[:, :, 1] * terminal_gen_action_prob[:, :, 0] * vocab_tgt_prob + \
-                   tgt_action_seq_type[:, :, 2] * terminal_gen_action_prob[:, :, 1] * copy_tgt_prob
+            tgt_action_seq_type[:, :, 1] * terminal_gen_action_prob[:, :, 0] * vocab_tgt_prob + \
+            tgt_action_seq_type[:, :, 2] * terminal_gen_action_prob[:, :, 1] * copy_tgt_prob
 
         likelihood = T.log(tgt_prob + 1.e-7 * (1 - tgt_action_seq_mask))
-        loss = - (likelihood * tgt_action_seq_mask).sum(axis=-1) # / tgt_action_seq_mask.sum(axis=-1)
+        # / tgt_action_seq_mask.sum(axis=-1)
+        loss = - (likelihood * tgt_action_seq_mask).sum(axis=-1)
         loss = T.mean(loss)
 
         # let's build the function!
@@ -271,7 +283,8 @@ class Model:
         if not config.parent_action_feed:
             par_rule_embed_reshaped *= 0.
 
-        decoder_input = T.concatenate([prev_action_embed_reshaped, node_embed_reshaped, par_rule_embed_reshaped], axis=-1)
+        decoder_input = T.concatenate(
+            [prev_action_embed_reshaped, node_embed_reshaped, par_rule_embed_reshaped], axis=-1)
 
         # (batch_size, 1, decoder_state_dim)
         # (batch_size, 1, decoder_state_dim)
@@ -293,13 +306,16 @@ class Model:
         decoder_next_cell = decoder_next_cell_dim3.flatten(2)
 
         decoder_next_state_trans_rule = self.decoder_hidden_state_W_rule(decoder_next_state)
-        decoder_next_state_trans_token = self.decoder_hidden_state_W_token(T.concatenate([decoder_next_state, ctx_vectors.flatten(2)], axis=-1))
+        decoder_next_state_trans_token = self.decoder_hidden_state_W_token(
+            T.concatenate([decoder_next_state, ctx_vectors.flatten(2)], axis=-1))
 
-        rule_prob = softmax(T.dot(decoder_next_state_trans_rule, T.transpose(self.rule_embedding_W)) + self.rule_embedding_b)
+        rule_prob = softmax(T.dot(decoder_next_state_trans_rule, T.transpose(
+            self.rule_embedding_W)) + self.rule_embedding_b)
 
         gen_action_prob = self.terminal_gen_softmax(decoder_next_state)
 
-        vocab_prob = softmax(T.dot(decoder_next_state_trans_token, T.transpose(self.vocab_embedding_W)) + self.vocab_embedding_b)
+        vocab_prob = softmax(T.dot(decoder_next_state_trans_token, T.transpose(
+            self.vocab_embedding_W)) + self.vocab_embedding_b)
 
         ptr_net_decoder_state = T.concatenate([decoder_next_state_dim3, ctx_vectors], axis=-1)
 
@@ -357,7 +373,8 @@ class Model:
         for i, tid in enumerate(src_token_id):
             if tid in token_set:
                 src_token_id[i] = -1
-            else: token_set.add(tid)
+            else:
+                token_set.add(tid)
 
         for t in xrange(max_time_step):
             hyp_num = len(hyp_samples)
@@ -373,7 +390,8 @@ class Model:
                     # for j, h in enumerate(hyp.hist_h):
                     #    hist_h[i, j] = h
 
-            prev_action_embed = np.array([hyp.action_embed for hyp in hyp_samples]).astype('float32')
+            prev_action_embed = np.array(
+                [hyp.action_embed for hyp in hyp_samples]).astype('float32')
             node_id = np.array([hyp.node_id for hyp in hyp_samples], dtype='int32')
             parent_rule_id = np.array([hyp.parent_rule_id for hyp in hyp_samples], dtype='int32')
             parent_t = np.array([hyp.get_action_parent_t() for hyp in hyp_samples], dtype='int32')
@@ -385,7 +403,8 @@ class Model:
                       query_embed_tiled, query_token_embed_mask_tiled]
 
             decoder_next_state, decoder_next_cell, \
-            rule_prob, gen_action_prob, vocab_prob, copy_prob  = self.decoder_func_next_step(*inputs)
+                rule_prob, gen_action_prob, vocab_prob, copy_prob = self.decoder_func_next_step(
+                    *inputs)
 
             new_hyp_samples = []
 
@@ -473,7 +492,8 @@ class Model:
             rule_apply_cand_num = len(rule_apply_cand_scores)
 
             if word_gen_hyp_num > 0:
-                word_gen_cand_scores = hyp_scores[word_gen_hyp_ids, None] + word_prob[word_gen_hyp_ids, :]
+                word_gen_cand_scores = hyp_scores[word_gen_hyp_ids,
+                                                  None] + word_prob[word_gen_hyp_ids, :]
                 word_gen_cand_scores_flat = word_gen_cand_scores.flatten()
 
                 cand_scores = np.concatenate([rule_apply_cand_scores, word_gen_cand_scores_flat])
@@ -524,7 +544,9 @@ class Model:
                     if log:
                         cand_copy_prob = cand_copy_probs[word_gen_hyp_id]
                         if cand_copy_prob > 0.5:
-                            new_hyp.log += ' || ' + str(new_hyp.frontier_nt()) + '{copy[%s][p=%f]}' % (token ,cand_copy_prob)
+                            new_hyp.log += ' || ' + \
+                                str(new_hyp.frontier_nt()) + \
+                                '{copy[%s][p=%f]}' % (token, cand_copy_prob)
 
                     new_hyp.score = new_hyp_score
                     new_hyp.state = copy.copy(decoder_next_state[hyp_id])
@@ -532,7 +554,6 @@ class Model:
                     new_hyp.cell = copy.copy(decoder_next_cell[hyp_id])
                     new_hyp.action_embed = vocab_embedding[tid]
                     new_hyp.node_id = grammar.get_node_type_id(frontier_nt)
-
 
                 # get the new frontier nt after rule application
                 new_frontier_nt = new_hyp.frontier_nt()
@@ -611,6 +632,7 @@ class Model:
             else:
                 logging.info('loading parameter [%s]', p_name)
                 assert np.array_equal(p.shape.eval(), weights_dict[p_name].shape), \
-                    'shape mis-match for [%s]!, %s != %s' % (p_name, p.shape.eval(), weights_dict[p_name].shape)
+                    'shape mis-match for [%s]!, %s != %s' % (p_name,
+                                                             p.shape.eval(), weights_dict[p_name].shape)
 
                 p.set_value(weights_dict[p_name])

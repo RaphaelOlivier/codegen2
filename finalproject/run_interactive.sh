@@ -6,7 +6,7 @@ if [ "$1" == "hs" ]; then
 	echo "run trained model for hs"
 	dataset="data/hs.freq3.pre_suf.unary_closure.bin"
 	model="model.hs_unary_closure_top20_word128_encoder256_rule128_node64.beam15.adadelta.simple_trans.8e39832.iter5600.npz"
-	commandline="-decode_max_time_step 350 -rule_embed_dim 128 -node_embed_dim 64"
+	commandline="-decode_max_time_step 750 -rule_embed_dim 128 -node_embed_dim 64"
 	datatype="hs"
 else
 	# django dataset

@@ -15,6 +15,8 @@ from evaluation import *
 from decoder import decode_python_dataset
 from components import Hyp
 from astnode import ASTNode
+from alignments import compute_alignments
+from retrievalmodel import RetrievalModel
 
 from nn.utils.generic_utils import init_logging
 from nn.utils.io_utils import deserialize_from_file, serialize_to_file
@@ -22,7 +24,7 @@ from nn.utils.io_utils import deserialize_from_file, serialize_to_file
 parser = argparse.ArgumentParser()
 parser.add_argument('-data')
 parser.add_argument('-random_seed', default=181783, type=int)
-parser.add_argument('-output_dir', default='.outputs')
+parser.add_argument('-output_dir', default='../../files/outputs')
 parser.add_argument('-model', default=None)
 
 # model's main configuration
@@ -47,8 +49,10 @@ parser.add_argument('-dropout', default=0.2, type=float)
 parser.add_argument('-encoder', default='bilstm', choices=['bilstm', 'lstm'])
 
 # decoder
-parser.add_argument('-parent_hidden_state_feed', dest='parent_hidden_state_feed', action='store_true')
-parser.add_argument('-no_parent_hidden_state_feed', dest='parent_hidden_state_feed', action='store_false')
+parser.add_argument('-parent_hidden_state_feed',
+                    dest='parent_hidden_state_feed', action='store_true')
+parser.add_argument('-no_parent_hidden_state_feed',
+                    dest='parent_hidden_state_feed', action='store_false')
 parser.set_defaults(parent_hidden_state_feed=True)
 
 parser.add_argument('-parent_action_feed', dest='parent_action_feed', action='store_true')
@@ -56,7 +60,8 @@ parser.add_argument('-no_parent_action_feed', dest='parent_action_feed', action=
 parser.set_defaults(parent_action_feed=True)
 
 parser.add_argument('-frontier_node_type_feed', dest='frontier_node_type_feed', action='store_true')
-parser.add_argument('-no_frontier_node_type_feed', dest='frontier_node_type_feed', action='store_false')
+parser.add_argument('-no_frontier_node_type_feed',
+                    dest='frontier_node_type_feed', action='store_false')
 parser.set_defaults(frontier_node_type_feed=True)
 
 parser.add_argument('-tree_attention', dest='tree_attention', action='store_true')
@@ -66,6 +71,10 @@ parser.set_defaults(tree_attention=False)
 parser.add_argument('-enable_copy', dest='enable_copy', action='store_true')
 parser.add_argument('-no_copy', dest='enable_copy', action='store_false')
 parser.set_defaults(enable_copy=True)
+
+parser.add_argument('-enable_retrieval', dest='enable_retrieval', action='store_true')
+parser.add_argument('-no_retrieval', dest='enable_retrieval', action='store_false')
+parser.set_defaults(enable_retrieval=False)
 
 # training
 parser.add_argument('-optimizer', default='adam')
@@ -90,6 +99,7 @@ train_parser = sub_parsers.add_parser('train')
 decode_parser = sub_parsers.add_parser('decode')
 interactive_parser = sub_parsers.add_parser('interactive')
 evaluate_parser = sub_parsers.add_parser('evaluate')
+align_parser = sub_parsers.add_parser('align')
 
 # decoding operation
 decode_parser.add_argument('-saveto', default='decode_results.bin')
@@ -111,6 +121,9 @@ parser.add_argument('-ifttt_test_split', default='data/ifff.test_data.gold.id')
 
 # interactive operation
 interactive_parser.add_argument('-mode', default='dataset')
+
+align_parser.add_argument('-saveto', default='../../files/aligned_hs.bin')
+
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -149,12 +162,19 @@ if __name__ == '__main__':
     logging.info('source vocab size: %d', train_data.annot_vocab.size)
     logging.info('target vocab size: %d', train_data.terminal_vocab.size)
 
-    if args.operation in ['train', 'decode', 'interactive']:
-        model = Model()
+    if args.operation in ['train', 'decode', 'interactive', 'align']:
+        if args.enable_retrieval:
+            model = RetrievalModel()
+        else:
+            model = Model()
         model.build()
 
         if args.model:
             model.load(args.model)
+
+    if args.operation == 'align':
+        aligned_train_data = compute_alignments(model, train_data)
+        serialize_to_file((aligned_train_data, dev_data, test_data), args.saveto)
 
     if args.operation == 'train':
         # train_data = train_data.get_dataset_by_ids(range(2000), 'train_sample')
@@ -193,10 +213,12 @@ if __name__ == '__main__':
             evaluate_decode_results(dataset, decode_results)
         elif config.mode == 'seq2tree':
             from evaluation import evaluate_seq2tree_sample_file
-            evaluate_seq2tree_sample_file(config.seq2tree_sample_file, config.seq2tree_id_file, dataset)
+            evaluate_seq2tree_sample_file(config.seq2tree_sample_file,
+                                          config.seq2tree_id_file, dataset)
         elif config.mode == 'seq2seq':
             from evaluation import evaluate_seq2seq_decode_results
-            evaluate_seq2seq_decode_results(dataset, config.seq2seq_decode_file, config.seq2seq_ref_file, is_nbest=config.is_nbest)
+            evaluate_seq2seq_decode_results(
+                dataset, config.seq2seq_decode_file, config.seq2seq_ref_file, is_nbest=config.is_nbest)
         elif config.mode == 'analyze':
             from evaluation import analyze_decode_results
 
@@ -225,7 +247,8 @@ if __name__ == '__main__':
                 vocab = train_data.annot_vocab
                 query_tokens = query.split(' ')
                 query_tokens_data = [query_to_data(query, vocab)]
-                example = namedtuple('example', ['query', 'data'])(query=query_tokens, data=query_tokens_data)
+                example = namedtuple('example', ['query', 'data'])(
+                    query=query_tokens, data=query_tokens_data)
 
             if hasattr(example, 'parse_tree'):
                 print 'gold parse tree:'

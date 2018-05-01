@@ -6,25 +6,25 @@ import copy
 
 from model import Model
 from components import CondAttLSTM
+import config
+from nn.utils.theano_utils import *
+
 
 class CondAttLSTMAligner(CondAttLSTM):
-    def __init__(self, input_dim, output_dim,
-                 context_dim, att_hidden_dim,
-                 init='glorot_uniform', inner_init='orthogonal', forget_bias_init='one',
-                 activation='tanh', inner_activation='sigmoid', name='CondAttLSTM'):
+    def __init__(self, *args, **kwargs):
 
-        super(CondAttLSTMAligner, self).__init__()
+        super(CondAttLSTMAligner, self).__init__(*args, **kwargs)
 
     def _step_align(self,
-              t, xi_t, xf_t, xo_t, xc_t, mask_t, parent_t,
-              h_tm1, c_tm1, hist_h,
-              u_i, u_f, u_o, u_c,
-              c_i, c_f, c_o, c_c,
-              h_i, h_f, h_o, h_c,
-              p_i, p_f, p_o, p_c,
-              att_h_w1, att_w2, att_b2,
-              context, context_mask, context_att_trans,
-              b_u):
+                    t, xi_t, xf_t, xo_t, xc_t, mask_t, parent_t,
+                    h_tm1, c_tm1, hist_h,
+                    u_i, u_f, u_o, u_c,
+                    c_i, c_f, c_o, c_c,
+                    h_i, h_f, h_o, h_c,
+                    p_i, p_f, p_o, p_c,
+                    att_h_w1, att_w2, att_b2,
+                    context, context_mask, context_att_trans,
+                    b_u):
 
         # context: (batch_size, context_size, context_dim)
 
@@ -45,7 +45,8 @@ class CondAttLSTMAligner(CondAttLSTM):
 
         ctx_att = ctx_att / T.sum(ctx_att, axis=-1, keepdims=True)
         # (batch_size, context_dim)
-        ctx_vec = T.sum(context * ctx_att[:, :, None], axis=1)
+        scores = ctx_att[:, :, None]
+        ctx_vec = T.sum(context * scores, axis=1)
         ##### attention over history #####
 
         def _attention_over_history():
@@ -60,15 +61,14 @@ class CondAttLSTMAligner(CondAttLSTM):
             hatt_raw = hatt_raw.reshape((hist_h.shape[0], hist_h.shape[1]))
             hatt_exp = T.exp(hatt_raw - T.max(hatt_raw, axis=-1, keepdims=True)) * hist_h_mask
             h_att_weights = hatt_exp / (T.sum(hatt_exp, axis=-1, keepdims=True) + 1e-7)
-            scores = h_att_weights[:, :, None]
+
             # (batch_size, output_dim)
             _h_ctx_vec = T.sum(hist_h * scores, axis=1)
 
-            return _h_ctx_vec, scores
+            return _h_ctx_vec
 
-        ctx, scores = _attention_over_history()
         h_ctx_vec = T.switch(t,
-                             ctx,
+                             _attention_over_history(),
                              T.zeros_like(h_tm1))
 
         if not config.parent_hidden_state_feed:
@@ -106,9 +106,8 @@ class CondAttLSTMAligner(CondAttLSTM):
 
         return h_t, c_t, scores, new_hist_h
 
-
     def align(self, X, context, parent_t_seq, init_state=None, init_cell=None, hist_h=None,
-                 mask=None, context_mask=None, srng=None, time_steps=None):
+              mask=None, context_mask=None, srng=None, time_steps=None):
         assert context_mask.dtype == 'int8', 'context_mask is not int8, got %s' % context_mask.dtype
 
         # (n_timestep, batch_size)
@@ -118,7 +117,6 @@ class CondAttLSTMAligner(CondAttLSTM):
 
         B_w = np.ones((4,), dtype=theano.config.floatX)
         B_u = np.ones((4,), dtype=theano.config.floatX)
-
 
         # (n_timestep, batch_size, output_dim)
         xi = T.dot(X * B_w[0], self.W_i) + self.b_i
@@ -144,7 +142,6 @@ class CondAttLSTMAligner(CondAttLSTM):
         if not hist_h:
             # (batch_size, n_timestep, output_dim)
             hist_h = alloc_zeros_matrix(X.shape[1], X.shape[0], self.output_dim)
-
 
         n_timestep = X.shape[0]
         time_steps = T.arange(n_timestep, dtype='int32')
@@ -173,19 +170,32 @@ class CondAttLSTMAligner(CondAttLSTM):
 
         att_scores = att_scores.dimshuffle((1, 0, 2))
 
-        alignments = T.argmax(att_scores,axis=1)
+        alignments = T.argmax(att_scores, axis=2)
 
-        return att_scores
+        return alignments
 
 
 class RetrievalModel(Model):
-    def __init__(self):
-        super(RetrievalModel,self).__init__()
+    def __init__(self, regular_model=None):
+        """
+        super(RetrievalModel, self).__init__()
         self.decoder_lstm = CondAttLSTMAligner(config.rule_embed_dim + config.node_embed_dim + config.rule_embed_dim,
-                                        config.decoder_hidden_dim, config.encoder_hidden_dim, config.attention_hidden_dim,
-                                        name='decoder_lstm')
+                                               config.decoder_hidden_dim, config.encoder_hidden_dim, config.attention_hidden_dim,
+                                               name='decoder_lstm')
+        """
+        super(RetrievalModel, self).__init__()
+
+        self.decoder_lstm = CondAttLSTMAligner(config.rule_embed_dim + config.node_embed_dim + config.rule_embed_dim,
+                                               config.decoder_hidden_dim, config.encoder_hidden_dim, config.attention_hidden_dim,
+                                               name='decoder_lstm')
+        # update params for new decoder
+        self.params = self.query_embedding.params + self.query_encoder_lstm.params + \
+            self.decoder_lstm.params + self.src_ptr_net.params + self.terminal_gen_softmax.params + \
+            [self.rule_embedding_W, self.rule_embedding_b, self.node_embedding, self.vocab_embedding_W, self.vocab_embedding_b] + \
+            self.decoder_hidden_state_W_rule.params + self.decoder_hidden_state_W_token.params
+
     def build(self):
-        super(RetrievalModel,self).build()
+        super(RetrievalModel, self).build()
         self.build_aligner()
 
     def build_aligner(self):
@@ -197,7 +207,8 @@ class RetrievalModel(Model):
 
         tgt_node_embed = self.node_embedding[tgt_node_seq]
         query_tokens = ndim_itensor(2, 'query_tokens')
-        query_token_embed, query_token_embed_mask = self.query_embedding(query_tokens, mask_zero=True)
+        query_token_embed, query_token_embed_mask = self.query_embedding(
+            query_tokens, mask_zero=True)
         batch_size = tgt_action_seq.shape[0]
         max_example_action_num = tgt_action_seq.shape[1]
 
@@ -214,18 +225,19 @@ class RetrievalModel(Model):
         if not config.parent_action_feed:
             tgt_par_rule_embed *= 0.
 
-        decoder_input = T.concatenate([tgt_action_seq_embed_tm1, tgt_node_embed, tgt_par_rule_embed], axis=-1)
+        decoder_input = T.concatenate(
+            [tgt_action_seq_embed_tm1, tgt_node_embed, tgt_par_rule_embed], axis=-1)
         query_embed = self.query_encoder_lstm(query_token_embed, mask=query_token_embed_mask,
                                               dropout=0, srng=self.srng)
 
         tgt_action_seq_mask = T.any(tgt_action_seq_type, axis=-1)
 
-        alignments = self.decoder_lstm.align(decoder_input,context=query_embed,
-                                                                  context_mask=query_token_embed_mask,
-                                                                  mask=tgt_action_seq_mask,
-                                                                  parent_t_seq=tgt_par_t_seq,
-                                                                  srng=self.srng)
+        alignments = self.decoder_lstm.align(decoder_input, context=query_embed,
+                                             context_mask=query_token_embed_mask,
+                                             mask=tgt_action_seq_mask,
+                                             parent_t_seq=tgt_par_t_seq,
+                                             srng=self.srng)
 
         alignment_inputs = [query_tokens, tgt_action_seq, tgt_action_seq_type,
-                        tgt_node_seq, tgt_par_rule_seq, tgt_par_t_seq]
+                            tgt_node_seq, tgt_par_rule_seq, tgt_par_t_seq]
         self.align = theano.function(alignment_inputs, [alignments])
