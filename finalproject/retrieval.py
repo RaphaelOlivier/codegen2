@@ -96,7 +96,7 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
 
 
 class Gram:
-    def __init__(self, entry_index, action, act_ids):
+    def __init__(self, entry_index, action, act_ids, score):
         self.entry_index = entry_index
         self.action_type = ACTION_NAMES[action.act_type]
         self.rule_id = None
@@ -105,17 +105,22 @@ class Gram:
 
         if action.act_type == APPLY_RULE:
             self.rule_id = act_ids[0]
+            self.id = self.rule_id
 
         elif action.act_type == GEN_TOKEN:
             self.token_id = act_ids[1]
+            self.id = self.token_id
 
         elif action.act_type == COPY_TOKEN:
             self.copy_id = act_ids[2]
+            self.id = self.copy_id
 
         else:
             assert(action.act_type == GEN_COPY_TOKEN)
+            self.action_type = ACTION_NAMES[GEN_TOKEN]
             self.token_id = act_ids[1]
             self.copy_id = act_ids[2]
+            self.id = self.token_id
 
         self.score = score
 
@@ -127,12 +132,8 @@ class Gram:
         elif self.action_type == "GEN_TOKEN":
             return str((self.action_type, self.token_id))
 
-        elif self.action_type == "COPY_TOKEN":
-            return str((self.action_type, self.copy_id))
-
         else:
-            assert(self.action_type == "GEN_COPY_TOKEN")
-            return str((self.action_type, self.token_id, self.copy_id))
+            return str((self.action_type, self.copy_id))
 
     def equals(self, ng):
         return self.action_type == ng.action_type and self.rule_id == ng.rule_id and self.copy_id == ng.copy_id and self.token_id == ng.token_id
@@ -185,7 +186,82 @@ def retrieve_translation_pieces(dataset, input_sentence):
             insert_ngram(ng, max_ngrams[i])
     # print[len(q) for q in max_ngrams[1:]]
     # print(input_sentence)
-    return max_ngrams
+    return NGramSearcher(max_ngrams)
+
+
+class NGramSearcher:
+    def __init__(self, ngram_lists):
+        self.max_ngrams = len(ngram_lists)-1
+        self.total_ngrams = sum([len(q) for q in ngram_lists])
+        full_list = []
+        start_index = [0]
+        for i in range(1, self.max_ngrams+1):
+            full_list = full_list + ngram_lists[i]
+            start_index.append(start_index[-1]+len(ngram_lists[i-1]))
+
+        assert self.total_ngrams == len(full_list)
+        self.ngrams_lastelt_id = []
+        self.ngrams_lastelt_flag = []
+        self.ngrams_score = []
+        self.ngram_follows = [[] for i in range(self.total_ngrams)]
+        self.indexes = dict()
+        self.indexes_per_last_value = dict()
+
+        for i, ng in enumerate(full_list):
+            flag = ng[-1].action_type
+            self.ngrams_lastelt_flag.append(flag)
+            if flag == "APPLY_RULE":
+                self.ngrams_lastelt_id.append(ng[-1].rule_id)
+            elif flag == "COPY_TOKEN":
+                self.ngrams_lastelt_id.append(ng[-1].copy_id)
+            else:
+                self.ngrams_lastelt_id.append(ng[-1].token_id)
+            self.ngrams_score.append(ng[-1].score)
+            l = []
+            for g in ng:
+                l.append(g.id)
+                l.append(g.action_type)
+            self.indexes[tuple(l)] = i
+
+            if len(l) > 2:
+                other_array = [self.indexes[tuple(l[:-2])]]+l[-2:]
+                self.indexes_per_last_value[tuple(other_array)] = i
+
+        for i in range(1, self.max_ngrams):
+            for j, ng in enumerate(ngram_lists[i]):
+                for k, ng2 in enumerate(ngram_lists[i+1]):
+                    eq = True
+                    for m in range(len(ng)):
+                        if not ng[m].equals(ng2[m]):
+                            eq = False
+                            break
+                    if eq:
+                        self.ngram_follows[j].append(start_index[i+1]+k)
+
+    def get_keys(self, previous_keys, new_value, new_flag):
+        new_keys = [None]
+
+        try:
+            # print(new_value, new_flag)
+            index = self.indexes[(new_value, new_flag)]
+            # print index
+            new_keys.append(index)
+            for i in range(1, self.max_ngrams):
+                index = self.indexes_per_last_value[(previous_keys[i], new_value, new_flag)]
+                new_keys.append(index)
+        except:
+            while len(new_keys) <= self.max_ngrams:
+                new_keys.append(None)
+        return new_keys
+
+    def __call__(self, keys):
+        l = list()
+        for k in keys[:-1]:
+            if k is not None:
+                for j in self.ngram_follows[k]:
+                    l.append(
+                        (self.ngrams_lastelt_id[j], self.ngrams_score[j], self.ngrams_lastelt_flag[j]))
+        return l
 
 
 if __name__ == "__main__":

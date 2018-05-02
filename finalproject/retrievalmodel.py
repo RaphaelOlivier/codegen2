@@ -16,6 +16,8 @@ from util import is_numeric
 from components import Hyp, PointerNet, CondAttLSTM
 from nn.utils.theano_utils import *
 
+from retrieval import NGramSearcher
+
 
 class CondAttLSTMAligner(CondAttLSTM):
     def __init__(self, *args, **kwargs):
@@ -249,11 +251,8 @@ class RetrievalModel(Model):
                             tgt_node_seq, tgt_par_rule_seq, tgt_par_t_seq]
         self.align = theano.function(alignment_inputs, [alignments])
 
-    def decode_with_retrieval(self, example, grammar, terminal_vocab, ngrams, beam_size, max_time_step, log=False):
+    def decode_with_retrieval(self, example, grammar, terminal_vocab, ngram_searcher, beam_size, max_time_step, log=False):
         # beam search decoding with ngram retrieval
-        ngrams_searcher = NGramSearcher(ngrams)
-        retrieval_factor = 0.01
-        print "Wesh wesh"
         eos = 1
         unk = terminal_vocab.unk
         vocab_embedding = self.vocab_embedding_W.get_value(borrow=True)
@@ -265,7 +264,7 @@ class RetrievalModel(Model):
         completed_hyp_num = 0
         live_hyp_num = 1
 
-        root_hyp = Hyp(grammar)
+        root_hyp = Hyp_ng(grammar)
         root_hyp.state = np.zeros(config.decoder_hidden_dim).astype('float32')
         root_hyp.cell = np.zeros(config.decoder_hidden_dim).astype('float32')
         root_hyp.action_embed = np.zeros(config.rule_embed_dim).astype('float32')
@@ -315,7 +314,7 @@ class RetrievalModel(Model):
                     *inputs)
 
             rule_prob, vocab_prob, copy_prob = update_probs(
-                rule_prob, vocab_prob, copy_prob, hyp_samples, ngrams_searcher)
+                rule_prob, vocab_prob, copy_prob, hyp_samples, ngram_searcher)
 
             new_hyp_samples = []
             cut_off_k = beam_size
@@ -411,9 +410,10 @@ class RetrievalModel(Model):
                     rule = rule_apply_cand_rules[cand_id]
                     new_hyp_score = rule_apply_cand_scores[cand_id]
 
-                    new_hyp = Hyp(hyp)
+                    new_hyp = Hyp_ng(hyp)
                     new_hyp.apply_rule(rule)
-
+                    new_hyp.update_ngrams(ngram_searcher.get_keys(
+                        new_hyp.get_ngrams(), rule_id, "APPLY_RULE"))
                     new_hyp.score = new_hyp_score
                     new_hyp.state = copy.copy(decoder_next_state[hyp_id])
                     new_hyp.hist_h.append(copy.copy(new_hyp.state))
@@ -432,9 +432,14 @@ class RetrievalModel(Model):
                     frontier_nt = hyp_frontier_nts[hyp_id]
                     hyp = hyp_samples[hyp_id]
                     new_hyp_score = word_gen_cand_scores[word_gen_hyp_id, tid]
-                    new_hyp = Hyp(hyp)
+                    new_hyp = Hyp_ng(hyp)
                     new_hyp.append_token(token)
-
+                    if tid == unk:
+                        new_hyp.update_ngrams(ngram_searcher.get_keys(new_hyp.get_ngrams(),
+                                                                      word_gen_hyp_id, "COPY_TOKEN"))
+                    else:
+                        new_hyp.update_ngrams(ngram_searcher.get_keys(
+                            new_hyp.get_ngrams(), tid, "GEN_TOKEN"))
                     if log:
                         cand_copy_prob = cand_copy_probs[word_gen_hyp_id]
                         if cand_copy_prob > 0.5:
@@ -480,29 +485,35 @@ class Hyp_ng(Hyp):
     def __init__(self, *args):
         super(Hyp_ng, self).__init__(*args)
         if isinstance(args[0], Hyp):
-            Hyp.hist_ng = args[0].ng
+            self.hist_ng = copy.copy(args[0].hist_ng)
         else:
-            Hyp.hist_ng = []
+            self.hist_ng = [[None for i in range(config.max_ngrams+1)]]
 
     def update_ngrams(self, new_ngram):
-        hist_ng.append(new_ngram)
+        # print new_ngram
+        self.hist_ng.append(new_ngram)
 
     def get_ngrams(self):
-        t = self.get_action_parent_t()
-        return hist_ng[t]
+        try:
+            t = self.get_action_parent_t()
+            # print t
+            # print len(self.hist_ng)
+            return self.hist_ng[t]
+        except:
+            return self.hist_ng[0]
 
 
-def update_probs(rule_prob, vocab_prob, copy_prob, hyp_samples, ngrams_searcher):
-    retrieval_factor = 0.01
+def update_probs(rule_prob, vocab_prob, copy_prob, hyp_samples, ngram_searcher):
+    f = config.retrieval_factor
     for k, hyp in enumerate(hyp_samples):
         ngram_keys = hyp.get_ngrams()
-        for value, score, flag in ngrams_searcher(ngram_keys):
+        for value, score, flag in ngram_searcher(ngram_keys):
             if flag == "APPLY_RULE":
-                rule_prob[k, value] += retrieval_factor*score
+                rule_prob[k, value] *= np.exp(f*score)
             elif flag == "GEN_TOKEN" or flag == "GEN_COPY_TOKEN":
-                vocab_prob[k, value] += retrieval_factor*score
+                vocab_prob[k, value] *= np.exp(f*score)
             else:
                 assert flag == "COPY_TOKEN"
-                copy_prob[k, value] += retrieval_factor*score
+                copy_prob[k, value] += np.exp(f*score)
 
     return rule_prob, vocab_prob, copy_prob

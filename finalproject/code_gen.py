@@ -76,6 +76,8 @@ parser.set_defaults(enable_copy=True)
 parser.add_argument('-enable_retrieval', dest='enable_retrieval', action='store_true')
 parser.add_argument('-no_retrieval', dest='enable_retrieval', action='store_false')
 parser.set_defaults(enable_retrieval=False)
+parser.add_argument('-max_ngrams', default=4)
+parser.add_argument('-retrieval_factor', default=0.1)
 
 # training
 parser.add_argument('-optimizer', default='adam')

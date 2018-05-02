@@ -53,7 +53,7 @@ class PointerNet(Layer):
         return scores
 
 
-class Hyp:
+class Hyp(object):
     def __init__(self, *args):
         if isinstance(args[0], Hyp):
             hyp = args[0]
