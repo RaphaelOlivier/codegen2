@@ -50,9 +50,9 @@ def compute_alignments(model, dataset):
     for i in range(dataset.count):
         inputs = dataset.get_prob_func_inputs([i])
         algn = model.align(*inputs)[0][0]
-        print algn
+        #print algn
         alignments.append(algn)
-    print len(alignments)
+    #print len(alignments)
     new_dataset = AlignedDataSet(dataset, alignments)
 
     return new_dataset
