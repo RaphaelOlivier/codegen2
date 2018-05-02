@@ -49,14 +49,14 @@ def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, sim
     init_timestep = 0
     node = aligned_entry.parse_tree
     actions = aligned_entry.actions
-    alignments = alter_for_copy(np.copy(aligned_entry.alignments), s2s_alignment_dict)
+
     # print len(alignments), len(actions)
     # print aligned_entry.query
     final_timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, unedited_words, simi_score,
                                         ngrams, current_ngrams, current_ngram_depth, init_timestep)
     # print(final_timestep, len(actions))
     #assert(final_timestep == len(actions))
-    return ngrams
+    return alter_for_copy(ngrams, s2s_alignment_dict)
 
 
 def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, unedited_words, simi_score, ngrams, current_ngrams, current_ngram_depth, timestep):
@@ -139,12 +139,15 @@ class Gram:
         return self.action_type == ng.action_type and self.rule_id == ng.rule_id and self.copy_id == ng.copy_id and self.token_id == ng.token_id
 
 
-def alter_for_copy(alignments, s2s_alignment_dict):
-    for t in range(alignments.shape[0]):
-        new_index = s2s_alignment_dict[alignments[t]][3]
-        if new_index is not None:
-            alignments[t] = new_index
-    return alignments
+def alter_for_copy(ngrams, s2s_alignment_dict):
+    for l in ngrams:
+        for ng in l:
+            for g in ng:
+                if g.copy_id is not None:
+                    new_index = s2s_alignment_dict[g.copy_id][3]
+                    if new_index is not None:
+                        g.copy_id = new_index
+    return ngrams
 
 
 def insert_ngram(ng, ngram_list):
