@@ -56,7 +56,29 @@ def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, sim
                                         ngrams, current_ngrams, current_ngram_depth, init_timestep)
     # print(final_timestep, len(actions))
     #assert(final_timestep == len(actions))
-    return alter_for_copy(ngrams, s2s_alignment_dict)
+    #assert check_sanity(ngrams)
+    # return alter_for_copy(ngrams, s2s_alignment_dict)
+    return ngrams
+
+
+def check_sanity(ngrams):
+    for i in range(1, config.max_ngrams):
+        for ng in ngrams[i+1]:
+            found = False
+            for ng2 in ngrams[i]:
+                if found:
+                    break
+                eq = True
+                for k in range(i):
+                    if not ng[k].equals(ng2[k]):
+                        eq = False
+                    if not eq:
+                        break
+                if eq:
+                    found = True
+            if not found:
+                return False
+    return True
 
 
 def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, unedited_words, simi_score, ngrams, current_ngrams, current_ngram_depth, timestep):
@@ -136,17 +158,21 @@ class Gram:
             return str((self.action_type, self.copy_id))
 
     def equals(self, ng):
-        return self.action_type == ng.action_type and self.rule_id == ng.rule_id and self.copy_id == ng.copy_id and self.token_id == ng.token_id
+        return self.action_type == ng.action_type and self.rule_id == ng.rule_id and self.copy_id == ng.copy_id and self.token_id == ng.token_id and self.id == ng.id
 
 
 def alter_for_copy(ngrams, s2s_alignment_dict):
     for l in ngrams:
         for ng in l:
             for g in ng:
-                if g.copy_id is not None:
+                if g.action_type == ACTION_NAMES[COPY_TOKEN] and g.copy_id is not None:
                     new_index = s2s_alignment_dict[g.copy_id][3]
+
                     if new_index is not None:
+                        # if g.copy_id == 7:
+                        # print ng, new_index
                         g.copy_id = new_index
+                        g.id = new_index
     return ngrams
 
 
@@ -225,7 +251,7 @@ class NGramSearcher:
                 l.append(g.id)
                 l.append(g.action_type)
             self.indexes[tuple(l)] = i
-
+            print tuple(l)
             if len(l) > 2:
                 other_array = [self.indexes[tuple(l[:-2])]]+l[-2:]
                 self.indexes_per_last_value[tuple(other_array)] = i
