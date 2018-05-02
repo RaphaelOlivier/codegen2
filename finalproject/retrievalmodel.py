@@ -505,6 +505,7 @@ class Hyp_ng(Hyp):
 
 def update_probs(rule_prob, vocab_prob, copy_prob, hyp_samples, ngram_searcher):
     f = config.retrieval_factor
+    # print f, type(f)
     for k, hyp in enumerate(hyp_samples):
         ngram_keys = hyp.get_ngrams()
         for value, score, flag in ngram_searcher(ngram_keys):
@@ -514,6 +515,6 @@ def update_probs(rule_prob, vocab_prob, copy_prob, hyp_samples, ngram_searcher):
                 vocab_prob[k, value] *= np.exp(f*score)
             else:
                 assert flag == "COPY_TOKEN"
-                copy_prob[k, value] += np.exp(f*score)
+                copy_prob[k, value] *= np.exp(f*score)
 
     return rule_prob, vocab_prob, copy_prob
