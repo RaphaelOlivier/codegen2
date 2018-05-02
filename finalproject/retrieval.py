@@ -52,7 +52,7 @@ def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, sim
 
     # print len(alignments), len(actions)
     # print aligned_entry.query
-    final_timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, unedited_words, simi_score,
+    final_timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node, aligned_entry.alignments, unedited_words, simi_score,
                                         ngrams, current_ngrams, current_ngram_depth, init_timestep)
     # print(final_timestep, len(actions))
     #assert(final_timestep == len(actions))
