@@ -3,6 +3,7 @@ import copy
 import simi
 from nn.utils.io_utils import deserialize_from_file
 from astnode import ASTNode
+from dataset import Action
 
 import numpy as np
 import re
@@ -39,25 +40,25 @@ def get_terminal_tokens(_terminal_str):
     return _terminal_tokens[:-1]
 
 
-def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, simi_score, s2s_alignment_dict):
-    current_ngrams = [[]]
-    ngrams = [[]]
-    for i in range(1, MAX_N_GRAMS+1):
-        current_ngrams.append(None)
-        ngrams.append([])
-    current_ngram_depth = 0
-    init_timestep = 0
-    node = aligned_entry.parse_tree
-    actions = aligned_entry.actions
+def alter_for_copy(ngrams, s2s_alignment_dict):
+    # print "altering"
+    assert check_sanity(ngrams)
+    for l in ngrams:
+        for ng in l:
+            # print ng
+            for g in ng:
+                if g.action_type == ACTION_NAMES[COPY_TOKEN] and g.copy_id is not None:
+                    # print True
+                    new_index = s2s_alignment_dict[g.copy_id][3]
 
-    # print len(alignments), len(actions)
-    # print aligned_entry.query
-    final_timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node, aligned_entry.alignments, unedited_words, simi_score,
-                                        ngrams, current_ngrams, current_ngram_depth, init_timestep)
-    # print(final_timestep, len(actions))
-    #assert(final_timestep == len(actions))
-    #assert check_sanity(ngrams)
-    # return alter_for_copy(ngrams, s2s_alignment_dict)
+                    if new_index is not None:
+                        # if g.copy_id == 7:
+                        #    print ng, new_index
+
+                        g.copy_id = new_index
+                        g.id = new_index
+                        # print ng
+    assert check_sanity(ngrams)
     return ngrams
 
 
@@ -81,6 +82,28 @@ def check_sanity(ngrams):
     return True
 
 
+def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, simi_score, s2s_alignment_dict):
+    current_ngrams = [[]]
+    ngrams = [[]]
+    for i in range(1, MAX_N_GRAMS+1):
+        current_ngrams.append(None)
+        ngrams.append([])
+    current_ngram_depth = 0
+    init_timestep = 0
+    node = aligned_entry.parse_tree
+    actions = aligned_entry.actions
+
+    # print len(alignments), len(actions)
+    # print aligned_entry.query
+    final_timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node, aligned_entry.alignments, unedited_words, simi_score,
+                                        ngrams, current_ngrams, current_ngram_depth, init_timestep)
+    # print(final_timestep, len(actions))
+    #assert(final_timestep == len(actions))
+
+    return alter_for_copy(ngrams, s2s_alignment_dict)
+    # return ngrams
+
+
 def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, unedited_words, simi_score, ngrams, current_ngrams, current_ngram_depth, timestep):
     # test alignment
     if timestep >= min(len(act_sequence), len(actions)):
@@ -90,7 +113,7 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
     if source_w in unedited_words.values():
         current_ngram_depth = min(current_ngram_depth+1, MAX_N_GRAMS)
         for i in range(current_ngram_depth, 0, -1):
-            current_ngrams[i] = current_ngrams[i-1]+[target_w]
+            current_ngrams[i] = copy.deepcopy(current_ngrams[i-1])+[target_w.copy()]
             ngrams[i].append(current_ngrams[i])
     else:
         current_ngram_depth = 0
@@ -119,32 +142,42 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
 
 class Gram:
     def __init__(self, entry_index, action, act_ids, score):
-        self.entry_index = entry_index
-        self.action_type = ACTION_NAMES[action.act_type]
+        self.entry_index = None
+        self.action_type = None
+        self.action_type = None
         self.rule_id = None
         self.token_id = None
         self.copy_id = None
+        self.score = None
+        self.id = None
+        if isinstance(action, Action):
+            self.entry_index = entry_index
+            self.action_type = ACTION_NAMES[action.act_type]
+            self.action_type = ACTION_NAMES[0]
+            self.rule_id = None
+            self.token_id = None
+            self.copy_id = None
 
-        if action.act_type == APPLY_RULE:
-            self.rule_id = act_ids[0]
-            self.id = self.rule_id
+            if action.act_type == APPLY_RULE:
+                self.rule_id = act_ids[0]
+                self.id = self.rule_id
 
-        elif action.act_type == GEN_TOKEN:
-            self.token_id = act_ids[1]
-            self.id = self.token_id
+            elif action.act_type == GEN_TOKEN:
+                self.token_id = act_ids[1]
+                self.id = self.token_id
 
-        elif action.act_type == COPY_TOKEN:
-            self.copy_id = act_ids[2]
-            self.id = self.copy_id
+            elif action.act_type == COPY_TOKEN:
+                self.copy_id = act_ids[2]
+                self.id = self.copy_id
 
-        else:
-            assert(action.act_type == GEN_COPY_TOKEN)
-            self.action_type = ACTION_NAMES[GEN_TOKEN]
-            self.token_id = act_ids[1]
-            self.copy_id = act_ids[2]
-            self.id = self.token_id
+            else:
+                assert(action.act_type == GEN_COPY_TOKEN)
+                self.action_type = ACTION_NAMES[GEN_TOKEN]
+                self.token_id = act_ids[1]
+                self.copy_id = act_ids[2]
+                self.id = self.token_id
 
-        self.score = score
+            self.score = score
 
     def __repr__(self):
 
@@ -160,20 +193,16 @@ class Gram:
     def equals(self, ng):
         return self.action_type == ng.action_type and self.rule_id == ng.rule_id and self.copy_id == ng.copy_id and self.token_id == ng.token_id and self.id == ng.id
 
-
-def alter_for_copy(ngrams, s2s_alignment_dict):
-    for l in ngrams:
-        for ng in l:
-            for g in ng:
-                if g.action_type == ACTION_NAMES[COPY_TOKEN] and g.copy_id is not None:
-                    new_index = s2s_alignment_dict[g.copy_id][3]
-
-                    if new_index is not None:
-                        # if g.copy_id == 7:
-                        # print ng, new_index
-                        g.copy_id = new_index
-                        g.id = new_index
-    return ngrams
+    def copy(self):
+        g = Gram(None, None, None, None)
+        g.entry_index = self.entry_index
+        g.action_type = self.action_type
+        g.rule_id = self.rule_id
+        g.token_id = self.token_id
+        g.copy_id = self.copy_id
+        g.id = self.id
+        g.score = self.score
+        return g
 
 
 def insert_ngram(ng, ngram_list):
@@ -251,7 +280,6 @@ class NGramSearcher:
                 l.append(g.id)
                 l.append(g.action_type)
             self.indexes[tuple(l)] = i
-            print tuple(l)
             if len(l) > 2:
                 other_array = [self.indexes[tuple(l[:-2])]]+l[-2:]
                 self.indexes_per_last_value[tuple(other_array)] = i
