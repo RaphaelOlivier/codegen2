@@ -5,9 +5,9 @@ device="cpu"
 if [ "$1" == "hs" ]; then
 	# hs dataset
 	echo "run trained model for hs"
-	dataset="../../files/hs.freq3.pre_suf.unary_closure.bin"
+	dataset="../../files/aligned_hs.bin"
 	model="model.hs.npz"
-	commandline="-decode_max_time_step 750 -rule_embed_dim 128 -node_embed_dim 64 -enable_retrieval"
+	commandline="-decode_max_time_step 750 -rule_embed_dim 128 -node_embed_dim 64 -retrieval_factor 0.1 -enable_retrieval"
 	datatype="hs"
 else
 	# django dataset

@@ -2,8 +2,11 @@ import traceback
 import config
 
 from model import *
+from retrieval import retrieve_translation_pieces
 
-def decode_python_dataset(model, dataset, verbose=True):
+
+def decode_python_dataset(model, train_data, dev_data, test_data, dataset_type="test_data", retrieval=False, verbose=True):
+    dataset = eval(dataset_type)
     from lang.py.parse import decode_tree_to_python_ast
     if verbose:
         logging.info('decoding [%s] set, num. examples: %d', dataset.name, dataset.count)
@@ -11,8 +14,14 @@ def decode_python_dataset(model, dataset, verbose=True):
     decode_results = []
     cum_num = 0
     for example in dataset.examples:
-        cand_list = model.decode(example, dataset.grammar, dataset.terminal_vocab,
-                                 beam_size=config.beam_size, max_time_step=config.decode_max_time_step)
+
+        if retrieval:
+            ngrams = retrieve_translation_pieces(train_data, example.query)
+            cand_list = model.decode_with_retrieval(example, dataset.grammar, dataset.terminal_vocab, ngrams,
+                                                    beam_size=config.beam_size, max_time_step=config.decode_max_time_step, log=True)
+        else:
+            cand_list = model.decode(example, dataset.grammar, dataset.terminal_vocab,
+                                     beam_size=config.beam_size, max_time_step=config.decode_max_time_step)
 
         exg_decode_results = []
         for cid, cand in enumerate(cand_list[:10]):
@@ -37,6 +46,7 @@ def decode_python_dataset(model, dataset, verbose=True):
     return decode_results
 
     # serialize_to_file(decode_results, '%s.decode_results.profile' % dataset.name)
+
 
 def decode_ifttt_dataset(model, dataset, verbose=True):
     if verbose:

@@ -17,6 +17,7 @@ from components import Hyp
 from astnode import ASTNode
 from alignments import compute_alignments
 from retrievalmodel import RetrievalModel
+from retrieval import retrieve_translation_pieces
 
 from nn.utils.generic_utils import init_logging
 from nn.utils.io_utils import deserialize_from_file, serialize_to_file
@@ -75,6 +76,8 @@ parser.set_defaults(enable_copy=True)
 parser.add_argument('-enable_retrieval', dest='enable_retrieval', action='store_true')
 parser.add_argument('-no_retrieval', dest='enable_retrieval', action='store_false')
 parser.set_defaults(enable_retrieval=False)
+parser.add_argument('-max_ngrams', default=4)
+parser.add_argument('-retrieval_factor', default=0.1, type=float)
 
 # training
 parser.add_argument('-optimizer', default='adam')
@@ -199,8 +202,8 @@ if __name__ == '__main__':
         if args.data_type == 'ifttt':
             decode_results = decode_and_evaluate_ifttt_by_split(model, test_data)
         else:
-            dataset = eval(args.type)
-            decode_results = decode_python_dataset(model, dataset)
+            decode_results = decode_python_dataset(
+                model, train_data, dev_data, test_data, args.type, args.enable_retrieval)
 
         serialize_to_file(decode_results, args.saveto)
 
@@ -253,9 +256,13 @@ if __name__ == '__main__':
             if hasattr(example, 'parse_tree'):
                 print 'gold parse tree:'
                 print example.parse_tree
-
-            cand_list = model.decode(example, train_data.grammar, train_data.terminal_vocab,
-                                     beam_size=args.beam_size, max_time_step=args.decode_max_time_step, log=True)
+            if args.enable_retrieval:
+                ngrams = retrieve_translation_pieces(train_data, example.query)
+                cand_list = model.decode_with_retrieval(example, train_data.grammar, train_data.terminal_vocab, ngrams,
+                                                        beam_size=args.beam_size, max_time_step=args.decode_max_time_step, log=True)
+            else:
+                cand_list = model.decode(example, train_data.grammar, train_data.terminal_vocab,
+                                         beam_size=args.beam_size, max_time_step=args.decode_max_time_step, log=True)
 
             has_grammar_error = any([c for c in cand_list if c.has_grammar_error])
             print 'has_grammar_error: ', has_grammar_error
