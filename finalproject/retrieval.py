@@ -109,7 +109,7 @@ def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, sim
     #    print aligned_entry.alignments[i], aligned_entry.query[aligned_entry.alignments[i]], actions[i]
     # print len(alignments), len(actions)
     # print aligned_entry.query
-    final_timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node, aligned_entry.alignments, unedited_words, simi_score,
+    final_timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node, None, unedited_words, simi_score,
                                         ngrams, current_ngrams, current_ngram_depth, init_timestep)
     # print(final_timestep, len(actions))
     #assert(final_timestep == len(actions))
@@ -123,8 +123,7 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
     if timestep >= min(len(act_sequence), len(actions)):
         return timestep
     target_w = Gram(entry_index, actions[timestep], act_sequence[timestep], simi_score)
-    source_w = alignments[timestep]
-    if not use_alignment or source_w in unedited_words.values():
+    if not use_alignment or alignments[timestep] in unedited_words.values():
         current_ngram_depth = min(current_ngram_depth+1, config.max_ngrams)
         for i in range(current_ngram_depth, 0, -1):
             current_ngrams[i] = copy.deepcopy(current_ngrams[i-1])+[target_w.copy()]
@@ -143,14 +142,14 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
         if node.children:
             for child in node.children:
                 timestep = aux_collect_ngrams(entry_index, actions, act_sequence, child, alignments, unedited_words, simi_score, ngrams,
-                                              copy.deepcopy(current_ngrams), current_ngram_depth, timestep)
+                                              copy.deepcopy(current_ngrams), current_ngram_depth, timestep, use_alignment)
         elif node.value is not None:
             terminal_tokens = get_terminal_tokens(str(node.value))
             timestep = aux_collect_ngrams(entry_index, actions, act_sequence, terminal_tokens, alignments, unedited_words, simi_score, ngrams,
-                                          copy.deepcopy(current_ngrams), current_ngram_depth, timestep)
+                                          copy.deepcopy(current_ngrams), current_ngram_depth, timestep, use_alignment)
     elif len(node) > 1:
         timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node[1:], alignments, unedited_words, simi_score, ngrams,
-                                      copy.deepcopy(current_ngrams), current_ngram_depth, timestep)
+                                      copy.deepcopy(current_ngrams), current_ngram_depth, timestep, use_alignment)
     return timestep
 
 
