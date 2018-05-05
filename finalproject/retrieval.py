@@ -246,7 +246,7 @@ def retrieve_translation_pieces(dataset, input_entry):
         # print "retrieved sentence"
         # print dataset.examples[i].query
         # print dataset.examples[i].parse_tree.pretty_print()
-        print simi_scores[i]
+        # print simi_scores[i]
 
         for i in range(1, config.max_ngrams+1):
             all_ngrams[i] += ngrams[i]
