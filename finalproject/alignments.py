@@ -1,5 +1,7 @@
 from dataset import DataSet, DataEntry
 from retrievalmodel import RetrievalModel
+
+import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -44,15 +46,29 @@ class AlignedEntry(DataEntry):
         return AlignedEntry(super(AlignedEntry, self).copy())
 
 
+def score_to_alignments(scores):
+    # print scores[:30, :]
+    # print scores.shape, scores.mean(axis=1).shape
+    # print "without normalization"
+    # print np.argmax(scores, axis=1)[:45]
+    # scores = scores - scores.mean(axis=0)
+    al = np.argmax(scores, axis=1)
+    # print "with normalization"
+    # print al[:45]
+    # print al[:30]
+    return al
+
+
 def compute_alignments(model, dataset):
 
     alignments = []
     for i in range(dataset.count):
         inputs = dataset.get_prob_func_inputs([i])
-        algn = model.align(*inputs)[0][0]
-        print algn
+        scores = model.align(*inputs)[0][0]
+        algn = score_to_alignments(scores)
+        # print algn
         alignments.append(algn)
-    print len(alignments)
+    # print len(alignments)
     new_dataset = AlignedDataSet(dataset, alignments)
 
     return new_dataset

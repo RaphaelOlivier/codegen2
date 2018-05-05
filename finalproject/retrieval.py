@@ -8,8 +8,6 @@ from dataset import Action
 import numpy as np
 import re
 
-MAX_N_GRAMS = 4
-MAX_RETRIEVED_SENTENCES = 10
 
 APPLY_RULE = 0
 GEN_TOKEN = 1
@@ -40,11 +38,17 @@ def get_terminal_tokens(_terminal_str):
     return _terminal_tokens[:-1]
 
 
-def alter_for_copy(ngrams, s2s_alignment_dict):
+def alter_for_copy(ngrams, s2s_alignment_dict, grammar=None):
     # print "altering"
+    # print[len(q) for q in ngrams[1:]]
+    new_ngrams = []
     assert check_sanity(ngrams)
     for l in ngrams:
+        new_l = []
         for ng in l:
+            new_ng = []
+            # print ng
+            add = True
             # print ng
             for g in ng:
                 if g.action_type == ACTION_NAMES[COPY_TOKEN] and g.copy_id is not None:
@@ -57,9 +61,18 @@ def alter_for_copy(ngrams, s2s_alignment_dict):
 
                         g.copy_id = new_index
                         g.id = new_index
-                        # print ng
-    assert check_sanity(ngrams)
-    return ngrams
+                    else:
+                        add = False
+                # if g.action_type == ACTION_NAMES[APPLY_RULE] and grammar is not None:
+                #    print grammar.rules[g.id]
+                new_ng.append(g)
+                # print ng
+            if add:
+                new_l.append(new_ng)
+        new_ngrams.append(new_l)
+    assert check_sanity(new_ngrams)
+    # print[len(q) for q in new_ngrams[1:]]
+    return new_ngrams
 
 
 def check_sanity(ngrams):
@@ -82,17 +95,18 @@ def check_sanity(ngrams):
     return True
 
 
-def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, simi_score, s2s_alignment_dict):
+def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, simi_score, s2s_alignment_dict, grammar=None):
     current_ngrams = [[]]
     ngrams = [[]]
-    for i in range(1, MAX_N_GRAMS+1):
+    for i in range(1, config.max_ngrams+1):
         current_ngrams.append(None)
         ngrams.append([])
     current_ngram_depth = 0
     init_timestep = 0
     node = aligned_entry.parse_tree
     actions = aligned_entry.actions
-
+    # for i in range(min(len(aligned_entry.alignments), len(actions))):
+    #    print aligned_entry.alignments[i], aligned_entry.query[aligned_entry.alignments[i]], actions[i]
     # print len(alignments), len(actions)
     # print aligned_entry.query
     final_timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node, aligned_entry.alignments, unedited_words, simi_score,
@@ -100,24 +114,24 @@ def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, sim
     # print(final_timestep, len(actions))
     #assert(final_timestep == len(actions))
 
-    return alter_for_copy(ngrams, s2s_alignment_dict)
+    return alter_for_copy(ngrams, s2s_alignment_dict, grammar)
     # return ngrams
 
 
-def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, unedited_words, simi_score, ngrams, current_ngrams, current_ngram_depth, timestep):
+def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, unedited_words, simi_score, ngrams, current_ngrams, current_ngram_depth, timestep, use_alignment=False):
     # test alignment
     if timestep >= min(len(act_sequence), len(actions)):
         return timestep
     target_w = Gram(entry_index, actions[timestep], act_sequence[timestep], simi_score)
     source_w = alignments[timestep]
-    if source_w in unedited_words.values():
-        current_ngram_depth = min(current_ngram_depth+1, MAX_N_GRAMS)
+    if not use_alignment or source_w in unedited_words.values():
+        current_ngram_depth = min(current_ngram_depth+1, config.max_ngrams)
         for i in range(current_ngram_depth, 0, -1):
             current_ngrams[i] = copy.deepcopy(current_ngrams[i-1])+[target_w.copy()]
             ngrams[i].append(current_ngrams[i])
     else:
         current_ngram_depth = 0
-        for i in range(1, MAX_N_GRAMS+1):
+        for i in range(1, config.max_ngrams+1):
             current_ngrams[i] = []
     # print timestep
     # print current_ngram_depth
@@ -153,10 +167,6 @@ class Gram:
         if isinstance(action, Action):
             self.entry_index = entry_index
             self.action_type = ACTION_NAMES[action.act_type]
-            self.action_type = ACTION_NAMES[0]
-            self.rule_id = None
-            self.token_id = None
-            self.copy_id = None
 
             if action.act_type == APPLY_RULE:
                 self.rule_id = act_ids[0]
@@ -172,23 +182,15 @@ class Gram:
 
             else:
                 assert(action.act_type == GEN_COPY_TOKEN)
-                self.action_type = ACTION_NAMES[GEN_TOKEN]
-                self.token_id = act_ids[1]
+                self.action_type = ACTION_NAMES[COPY_TOKEN]
                 self.copy_id = act_ids[2]
-                self.id = self.token_id
+                self.id = self.copy_id
 
             self.score = score
 
     def __repr__(self):
 
-        if self.action_type == "APPLY_RULE":
-            return str((self.action_type, self.rule_id))
-
-        elif self.action_type == "GEN_TOKEN":
-            return str((self.action_type, self.token_id))
-
-        else:
-            return str((self.action_type, self.copy_id))
+        return str((self.action_type, self.id))
 
     def equals(self, ng):
         return self.action_type == ng.action_type and self.rule_id == ng.rule_id and self.copy_id == ng.copy_id and self.token_id == ng.token_id and self.id == ng.id
@@ -219,27 +221,38 @@ def insert_ngram(ng, ngram_list):
     ngram_list.append(ng)
 
 
-def retrieve_translation_pieces(dataset, input_sentence):
-
-    all_ngrams = [[] for k in range(MAX_N_GRAMS+1)]
+def retrieve_translation_pieces(dataset, input_entry):
+    # print input_sentence
+    input_sentence = input_entry.query
+    # print "input sentence"
+    # print input_entry.query
+    # print input_entry.parse_tree.pretty_print()
+    all_ngrams = [[] for k in range(config.max_ngrams+1)]
     simi_scores = []
     for entry in dataset.examples:
         simi_scores.append(simi.simi(input_sentence, entry.query, True))
-    top_indices = np.argsort(np.array(simi_scores))[-MAX_RETRIEVED_SENTENCES:][::-1]
+    simi_scores = np.array(simi_scores)
+    simi_scores -= simi_scores.mean()
+    top_indices = np.argsort(simi_scores)[-config.max_retrieved_sentences:][::-1]
     for i in top_indices:
-
+        # print dataset.examples[i].query
+        # print simi_scores[i]
         matrix, dist = simi.sentence_distance(input_sentence, dataset.examples[i].query, True)
         unedited_words, first_index_dict, second_index_dict = simi.align(
             input_sentence, dataset.examples[i].query, matrix, False, True)
         act_sequence = dataset.data_matrix["tgt_action_seq"][i]
         ngrams = collect_ngrams(dataset.examples[i], i, act_sequence,
-                                unedited_words, simi_scores[i], second_index_dict)
+                                unedited_words, simi_scores[i], second_index_dict, grammar=dataset.grammar)
+        # print "retrieved sentence"
+        # print dataset.examples[i].query
+        # print dataset.examples[i].parse_tree.pretty_print()
+        print simi_scores[i]
 
-        for i in range(1, MAX_N_GRAMS+1):
+        for i in range(1, config.max_ngrams+1):
             all_ngrams[i] += ngrams[i]
     # print[len(q) for q in all_ngrams[1:]]
-    max_ngrams = [[] for k in range(MAX_N_GRAMS+1)]
-    for i in range(1, MAX_N_GRAMS+1):
+    max_ngrams = [[] for k in range(config.max_ngrams+1)]
+    for i in range(1, config.max_ngrams+1):
         for ng in all_ngrams[i]:
             insert_ngram(ng, max_ngrams[i])
     # print[len(q) for q in max_ngrams[1:]]
@@ -282,6 +295,7 @@ class NGramSearcher:
             self.indexes[tuple(l)] = i
             if len(l) > 2:
                 other_array = [self.indexes[tuple(l[:-2])]]+l[-2:]
+                # print other_array
                 self.indexes_per_last_value[tuple(other_array)] = i
 
         for i in range(1, self.max_ngrams):
@@ -293,17 +307,26 @@ class NGramSearcher:
                             eq = False
                             break
                     if eq:
-                        self.ngram_follows[j].append(start_index[i+1]+k)
+                        self.ngram_follows[start_index[i]+j].append(start_index[i+1]+k)
+        # for j in ngram_follows[0]:
+        #    print j, ngrams_lastelt_id[j], ngrams_lastelt_flag[j]
+        # for i in range(start_index[2]):
+        #     print self.ngrams_lastelt_id[i], self.ngrams_lastelt_flag[i]
 
-    def get_keys(self, previous_keys, new_value, new_flag):
+    def get_keys(self, previous_keys, new_value, new_flag, verbose=False):
         new_keys = [None]
 
+        if verbose:
+            print "new unigram :"
+            print new_value, new_flag
         try:
             # print(new_value, new_flag)
             index = self.indexes[(new_value, new_flag)]
             # print index
             new_keys.append(index)
             for i in range(1, self.max_ngrams):
+                if verbose:
+                    print(previous_keys[i], new_value, new_flag)
                 index = self.indexes_per_last_value[(previous_keys[i], new_value, new_flag)]
                 new_keys.append(index)
         except:

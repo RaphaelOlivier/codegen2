@@ -9,7 +9,7 @@ import traceback
 from nn.utils.generic_utils import init_logging
 
 from model import *
-
+from postprocess import process_class_names
 
 DJANGO_ANNOT_FILE = '/Users/yinpengcheng/Research/SemanticParsing/CodeGeneration/en-django/all.anno'
 
@@ -45,7 +45,8 @@ def evaluate(model, dataset, verbose=True):
 
         assert len(predict_rules) > 0 and len(gold_rules) > 0
 
-        exact_match = sorted(gold_rules, key=lambda x: x.__repr__()) == sorted(predict_rules, key=lambda x: x.__repr__())
+        exact_match = sorted(gold_rules, key=lambda x: x.__repr__()) == sorted(
+            predict_rules, key=lambda x: x.__repr__())
         if exact_match:
             exact_match_ratio += 1
 
@@ -147,6 +148,8 @@ def evaluate_decode_results(dataset, decode_results, verbose=True):
         refer_tokens_for_bleu = tokenize_for_bleu_eval(ref_code_for_bleu)
         pred_tokens_for_bleu = tokenize_for_bleu_eval(pred_code_for_bleu)
 
+        pred_tokens_for_bleu = process_class_names(pred_tokens_for_bleu)
+
         # The if-chunk below is for debugging purpose, sometimes the reference cannot match with the prediction
         # because of inconsistent quotes (e.g., single quotes in reference, double quotes in prediction).
         # However most of these cases are solved by cannonicalizing the reference code using astor (parse the reference
@@ -167,7 +170,8 @@ def evaluate_decode_results(dataset, decode_results, verbose=True):
 
         # try:
         ngram_weights = [0.25] * min(4, len(refer_tokens_for_bleu))
-        bleu_score = sentence_bleu([refer_tokens_for_bleu], pred_tokens_for_bleu, weights=ngram_weights, smoothing_function=sm.method3)
+        bleu_score = sentence_bleu([refer_tokens_for_bleu], pred_tokens_for_bleu,
+                                   weights=ngram_weights, smoothing_function=sm.method3)
         cum_bleu += bleu_score
         # except:
         #    pass
@@ -202,7 +206,6 @@ def evaluate_decode_results(dataset, decode_results, verbose=True):
             # for Hiro's evaluation
             f_generated_code.write(pred_code_for_bleu.replace('\n', '#NEWLINE#') + '\n')
 
-
         # compute oracle
         best_score = 0.
         cur_oracle_acc = 0.
@@ -219,7 +222,8 @@ def evaluate_decode_results(dataset, decode_results, verbose=True):
                     pred_code_for_bleu = de_canonicalize_code(code, example.meta_data['raw_code'])
                     # convert canonicalized code to raw code
                     for literal, place_holder in example.meta_data['str_map'].iteritems():
-                        pred_code_for_bleu = pred_code_for_bleu.replace('\'' + place_holder + '\'', literal)
+                        pred_code_for_bleu = pred_code_for_bleu.replace(
+                            '\'' + place_holder + '\'', literal)
                 elif config.data_type == 'hs':
                     pred_code_for_bleu = code
 
@@ -245,7 +249,8 @@ def evaluate_decode_results(dataset, decode_results, verbose=True):
     cum_oracle_bleu /= dataset.count
     cum_oracle_acc /= dataset.count
 
-    logging.info('corpus level bleu: %f', corpus_bleu(all_references, all_predictions, smoothing_function=sm.method3))
+    logging.info('corpus level bleu: %f', corpus_bleu(
+        all_references, all_predictions, smoothing_function=sm.method3))
     logging.info('sentence level bleu: %f', cum_bleu)
     logging.info('accuracy: %f', cum_acc)
     logging.info('oracle bleu: %f', cum_oracle_bleu)
@@ -299,9 +304,10 @@ def analyze_decode_results(dataset, decode_results, verbose=True):
         return -1, -1
 
     binned_results_dict = defaultdict(list)
+
     def get_binned_key(ast_size):
         cutoff = 50 if config.data_type == 'django' else 250
-        k = 10 if config.data_type == 'django' else 25 # for hs
+        k = 10 if config.data_type == 'django' else 25  # for hs
 
         if ast_size >= cutoff:
             return '%d - inf' % cutoff
@@ -312,7 +318,6 @@ def analyze_decode_results(dataset, decode_results, verbose=True):
         key = '%d - %d' % (lower, upper)
 
         return key
-
 
     for eid in range(dataset.count):
         example = dataset.examples[eid]
@@ -373,7 +378,8 @@ def analyze_decode_results(dataset, decode_results, verbose=True):
 
         # try:
         ngram_weights = [0.25] * min(4, len(refer_tokens_for_bleu))
-        bleu_score = sentence_bleu([refer_tokens_for_bleu], pred_tokens_for_bleu, weights=ngram_weights, smoothing_function=sm.method3)
+        bleu_score = sentence_bleu([refer_tokens_for_bleu], pred_tokens_for_bleu,
+                                   weights=ngram_weights, smoothing_function=sm.method3)
         cum_bleu += bleu_score
         # except:
         #    pass
@@ -421,7 +427,8 @@ def analyze_decode_results(dataset, decode_results, verbose=True):
                     pred_code_for_bleu = de_canonicalize_code(code, example.meta_data['raw_code'])
                     # convert canonicalized code to raw code
                     for literal, place_holder in example.meta_data['str_map'].iteritems():
-                        pred_code_for_bleu = pred_code_for_bleu.replace('\'' + place_holder + '\'', literal)
+                        pred_code_for_bleu = pred_code_for_bleu.replace(
+                            '\'' + place_holder + '\'', literal)
                 elif config.data_type == 'hs':
                     pred_code_for_bleu = code
 
@@ -444,14 +451,16 @@ def analyze_decode_results(dataset, decode_results, verbose=True):
 
         ref_ast_size = example.parse_tree.size
         binned_key = get_binned_key(ref_ast_size)
-        binned_results_dict[binned_key].append((bleu_score, cur_example_acc, best_bleu_score, cur_oracle_acc))
+        binned_results_dict[binned_key].append(
+            (bleu_score, cur_example_acc, best_bleu_score, cur_oracle_acc))
 
     cum_bleu /= dataset.count
     cum_acc /= dataset.count
     cum_oracle_bleu /= dataset.count
     cum_oracle_acc /= dataset.count
 
-    logging.info('corpus level bleu: %f', corpus_bleu(all_references, all_predictions, smoothing_function=sm.method3))
+    logging.info('corpus level bleu: %f', corpus_bleu(
+        all_references, all_predictions, smoothing_function=sm.method3))
     logging.info('sentence level bleu: %f', cum_bleu)
     logging.info('accuracy: %f', cum_acc)
     logging.info('oracle bleu: %f', cum_oracle_bleu)
@@ -543,7 +552,8 @@ def evaluate_seq2seq_decode_results(dataset, seq2seq_decode_file, seq2seq_ref_fi
 
     def is_well_formed_python_code(_hyp):
         try:
-            _hyp = _hyp.replace('#NEWLINE#', '\n').replace('#INDENT#', '    ').replace(' #MERGE# ', '')
+            _hyp = _hyp.replace('#NEWLINE#', '\n').replace(
+                '#INDENT#', '    ').replace(' #MERGE# ', '')
             hyp_ast_tree = parse(_hyp)
             return True
         except:
@@ -573,16 +583,16 @@ def evaluate_seq2seq_decode_results(dataset, seq2seq_decode_file, seq2seq_ref_fi
             code = decode_file_data[eid]
 
         code = code.replace('#NEWLINE#', '\n').replace('#INDENT#', '    ').replace(' #MERGE# ', '')
-        ref_code = ref_code_data[eid].replace('#NEWLINE#', '\n').replace('#INDENT#', '    ').replace(' #MERGE# ', '')
+        ref_code = ref_code_data[eid].replace('#NEWLINE#', '\n').replace(
+            '#INDENT#', '    ').replace(' #MERGE# ', '')
 
         if code == ref_code:
             cum_acc += 1
             cur_example_correct = True
 
-
         if config.data_type == 'django':
             ref_code_for_bleu = example.meta_data['raw_code']
-            pred_code_for_bleu = code # de_canonicalize_code(code, example.meta_data['raw_code'])
+            pred_code_for_bleu = code  # de_canonicalize_code(code, example.meta_data['raw_code'])
             # ref_code_for_bleu = de_canonicalize_code(ref_code_for_bleu, example.meta_data['raw_code'])
             # convert canonicalized code to raw code
             for literal, place_holder in example.meta_data['str_map'].iteritems():
@@ -597,7 +607,8 @@ def evaluate_seq2seq_decode_results(dataset, seq2seq_decode_file, seq2seq_ref_fi
         pred_tokens_for_bleu = tokenize_for_bleu_eval(pred_code_for_bleu)
 
         ngram_weights = [0.25] * min(4, len(refer_tokens_for_bleu))
-        bleu_score = sentence_bleu([refer_tokens_for_bleu], pred_tokens_for_bleu, weights=ngram_weights, smoothing_function=sm.method3)
+        bleu_score = sentence_bleu([refer_tokens_for_bleu], pred_tokens_for_bleu,
+                                   weights=ngram_weights, smoothing_function=sm.method3)
         cum_bleu += bleu_score
 
     cum_bleu /= dataset.count
@@ -609,7 +620,8 @@ def evaluate_seq2seq_decode_results(dataset, seq2seq_decode_file, seq2seq_ref_fi
 
 def evaluate_seq2tree_sample_file(sample_file, id_file, dataset):
     from lang.py.parse import tokenize_code, de_canonicalize_code
-    import ast, astor
+    import ast
+    import astor
     import traceback
     from lang.py.seq2tree_exp import seq2tree_repr_to_ast_tree, merge_broken_value_nodes
     from lang.py.parse import decode_tree_to_python_ast
@@ -643,7 +655,8 @@ def evaluate_seq2tree_sample_file(sample_file, id_file, dataset):
         # print 'working on %d' % i
         ref_repr = f_sample.readline().strip()
         predict_repr = f_sample.readline().strip()
-        predict_repr = predict_repr.replace('<U>', 'str{}{unk}') # .replace('( )', '( str{}{unk} )')
+        # .replace('( )', '( str{}{unk} )')
+        predict_repr = predict_repr.replace('<U>', 'str{}{unk}')
         f_sample.readline()
 
         # if ' ( ) ' in ref_repr:
@@ -712,7 +725,8 @@ def evaluate_seq2tree_sample_file(sample_file, id_file, dataset):
     cum_acc /= len(line_id_to_raw_id)
     logging.info('nun. examples: %d', len(line_id_to_raw_id))
     logging.info('num. errors when converting repr to tree: %d', convert_error_num)
-    logging.info('ratio of grammatically incorrect trees: %f', convert_error_num / float(len(line_id_to_raw_id)))
+    logging.info('ratio of grammatically incorrect trees: %f',
+                 convert_error_num / float(len(line_id_to_raw_id)))
     logging.info('sentence level bleu: %f', cum_bleu)
     logging.info('accuracy: %f', cum_acc)
 
@@ -781,7 +795,8 @@ def evaluate_ifttt_results(dataset, decode_results, verbose=True):
             cid, cand_hyp = decode_cand
             predict_parse_tree = cand_hyp.tree
 
-            channel_acc, channel_func_acc, prod_f1 = ifttt_metric(predict_parse_tree, ref_parse_tree)
+            channel_acc, channel_func_acc, prod_f1 = ifttt_metric(
+                predict_parse_tree, ref_parse_tree)
 
             if prod_f1 > best_prod_f1:
                 best_prod_f1 = prod_f1
@@ -811,13 +826,13 @@ def ifttt_metric(predict_parse_tree, ref_parse_tree):
     # channel acc.
     channel_match = False
     if predict_parse_tree['TRIGGER'].children[0].type == ref_parse_tree['TRIGGER'].children[0].type and \
-                    predict_parse_tree['ACTION'].children[0].type == ref_parse_tree['ACTION'].children[0].type:
+            predict_parse_tree['ACTION'].children[0].type == ref_parse_tree['ACTION'].children[0].type:
         channel_acc += 1.
         channel_match = True
 
     # channel+func acc.
     if channel_match and predict_parse_tree['TRIGGER'].children[0].children[0].type == ref_parse_tree['TRIGGER'].children[0].children[0].type and \
-                    predict_parse_tree['ACTION'].children[0].children[0].type == ref_parse_tree['ACTION'].children[0].children[0].type:
+            predict_parse_tree['ACTION'].children[0].children[0].type == ref_parse_tree['ACTION'].children[0].children[0].type:
         channel_func_acc += 1.
 
     # predict_parse_tree is of type DecodingTree, different from reference tree!
@@ -834,8 +849,9 @@ def ifttt_metric(predict_parse_tree, ref_parse_tree):
 
 
 def decode_and_evaluate_ifttt(model, test_data):
-    raw_ids = [int(i.strip()) for i in open(config.ifttt_test_split)]  # 'data/ifff.test_data.gold.id'
-    eids  = [i for i, e in enumerate(test_data.examples) if e.raw_id in raw_ids]
+    raw_ids = [int(i.strip())
+               for i in open(config.ifttt_test_split)]  # 'data/ifff.test_data.gold.id'
+    eids = [i for i, e in enumerate(test_data.examples) if e.raw_id in raw_ids]
     test_data_subset = test_data.get_dataset_by_ids(eids, test_data.name + '.subset')
 
     from decoder import decode_ifttt_dataset
@@ -847,7 +863,8 @@ def decode_and_evaluate_ifttt(model, test_data):
 
 def decode_and_evaluate_ifttt_by_split(model, test_data):
     for split in ['ifff.test_data.omit_non_english.id', 'ifff.test_data.omit_unintelligible.id', 'ifff.test_data.gold.id']:
-        raw_ids = [int(i.strip()) for i in open(os.path.join(config.ifttt_test_split), split)]  # 'data/ifff.test_data.gold.id'
+        # 'data/ifff.test_data.gold.id'
+        raw_ids = [int(i.strip()) for i in open(os.path.join(config.ifttt_test_split), split)]
         eids = [i for i, e in enumerate(test_data.examples) if e.raw_id in raw_ids]
         test_data_subset = test_data.get_dataset_by_ids(eids, test_data.name + '.' + split)
 

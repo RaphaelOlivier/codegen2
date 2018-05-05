@@ -73,11 +73,13 @@ parser.add_argument('-enable_copy', dest='enable_copy', action='store_true')
 parser.add_argument('-no_copy', dest='enable_copy', action='store_false')
 parser.set_defaults(enable_copy=True)
 
+# retrieval decoding
 parser.add_argument('-enable_retrieval', dest='enable_retrieval', action='store_true')
 parser.add_argument('-no_retrieval', dest='enable_retrieval', action='store_false')
 parser.set_defaults(enable_retrieval=False)
 parser.add_argument('-max_ngrams', default=4)
 parser.add_argument('-retrieval_factor', default=0.1, type=float)
+parser.add_argument('-max_retrieved_sentences', default=10, type=int)
 
 # training
 parser.add_argument('-optimizer', default='adam')
@@ -202,6 +204,7 @@ if __name__ == '__main__':
         if args.data_type == 'ifttt':
             decode_results = decode_and_evaluate_ifttt_by_split(model, test_data)
         else:
+            print args.type
             decode_results = decode_python_dataset(
                 model, train_data, dev_data, test_data, args.type, args.enable_retrieval)
 
@@ -257,7 +260,7 @@ if __name__ == '__main__':
                 print 'gold parse tree:'
                 print example.parse_tree
             if args.enable_retrieval:
-                ngrams = retrieve_translation_pieces(train_data, example.query)
+                ngrams = retrieve_translation_pieces(train_data, example)
                 cand_list = model.decode_with_retrieval(example, train_data.grammar, train_data.terminal_vocab, ngrams,
                                                         beam_size=args.beam_size, max_time_step=args.decode_max_time_step, log=True)
             else:

@@ -16,7 +16,7 @@ def decode_python_dataset(model, train_data, dev_data, test_data, dataset_type="
     for example in dataset.examples:
 
         if retrieval:
-            ngrams = retrieve_translation_pieces(train_data, example.query)
+            ngrams = retrieve_translation_pieces(train_data, example)
             cand_list = model.decode_with_retrieval(example, dataset.grammar, dataset.terminal_vocab, ngrams,
                                                     beam_size=config.beam_size, max_time_step=config.decode_max_time_step, log=True)
         else:

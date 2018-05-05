@@ -7,7 +7,7 @@ if [ "$1" == "hs" ]; then
 	echo "run trained model for hs"
 	dataset="../../files/aligned_hs.bin"
 	model="model.hs.npz"
-	commandline="-decode_max_time_step 750 -rule_embed_dim 128 -node_embed_dim 64 -retrieval_factor 0.1 -enable_retrieval"
+	commandline="-decode_max_time_step 750 -rule_embed_dim 128 -node_embed_dim 64 -enable_retrieval -retrieval_factor 0.05 -max_retrieved_sentences 1"
 	datatype="hs"
 else
 	# django dataset
@@ -27,8 +27,9 @@ THEANO_FLAGS="mode=FAST_RUN,device=${device},floatX=float32" python code_gen.py 
 ${commandline} \
 decode \
 -saveto ${output}/${model}.decode_results.test.bin
+-type dev_data
 
-evaluate the decoding result
+# evaluate the decoding result
 python code_gen.py \
 -data_type ${datatype} \
 -data ${dataset} \

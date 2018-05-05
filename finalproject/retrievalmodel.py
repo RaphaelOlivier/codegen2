@@ -179,9 +179,7 @@ class CondAttLSTMAligner(CondAttLSTM):
 
         att_scores = att_scores.dimshuffle((1, 0, 2))
 
-        alignments = T.argmax(att_scores, axis=2)
-
-        return alignments
+        return att_scores
 
 
 class RetrievalModel(Model):
@@ -253,7 +251,7 @@ class RetrievalModel(Model):
 
     def decode_with_retrieval(self, example, grammar, terminal_vocab, ngram_searcher, beam_size, max_time_step, log=False):
         # beam search decoding with ngram retrieval
-        eos = 1
+        eos = terminal_vocab.eos
         unk = terminal_vocab.unk
         vocab_embedding = self.vocab_embedding_W.get_value(borrow=True)
         rule_embedding = self.rule_embedding_W.get_value(borrow=True)
@@ -314,7 +312,7 @@ class RetrievalModel(Model):
                     *inputs)
 
             rule_prob, vocab_prob, copy_prob = update_probs(
-                rule_prob, vocab_prob, copy_prob, hyp_samples, ngram_searcher)
+                rule_prob, vocab_prob, copy_prob, hyp_samples, ngram_searcher, grammar=grammar)
 
             new_hyp_samples = []
             cut_off_k = beam_size
@@ -400,8 +398,10 @@ class RetrievalModel(Model):
             top_cand_ids = (-cand_scores).argsort()[:beam_size - completed_hyp_num]
 
             # expand_cand_num = 0
-            for cand_id in top_cand_ids:
+            for k, cand_id in enumerate(top_cand_ids):
                 # cand is rule application
+                # verbose = k==0
+                verbose = False
                 new_hyp = None
                 if cand_id < rule_apply_cand_num:
                     hyp_id = rule_apply_cand_hyp_ids[cand_id]
@@ -412,8 +412,9 @@ class RetrievalModel(Model):
 
                     new_hyp = Hyp_ng(hyp)
                     new_hyp.apply_rule(rule)
+                    new_hyp.to_move = False
                     new_hyp.update_ngrams(ngram_searcher.get_keys(
-                        new_hyp.get_ngrams(), rule_id, "APPLY_RULE"))
+                        hyp.get_ngrams(), rule_id, "APPLY_RULE", verbose))
                     new_hyp.score = new_hyp_score
                     new_hyp.state = copy.copy(decoder_next_state[hyp_id])
                     new_hyp.hist_h.append(copy.copy(new_hyp.state))
@@ -434,12 +435,23 @@ class RetrievalModel(Model):
                     new_hyp_score = word_gen_cand_scores[word_gen_hyp_id, tid]
                     new_hyp = Hyp_ng(hyp)
                     new_hyp.append_token(token)
+
                     if tid == unk:
-                        new_hyp.update_ngrams(ngram_searcher.get_keys(new_hyp.get_ngrams(),
-                                                                      word_gen_hyp_id, "COPY_TOKEN"))
+                        new_hyp.update_ngrams(ngram_searcher.get_keys(hyp.get_ngrams(),
+                                                                      unk_pos, "COPY_TOKEN", verbose))
+                    elif tid in src_token_id:
+                        new_hyp.update_ngrams(ngram_searcher.get_keys(hyp.get_ngrams(),
+                                                                      src_token_id.index(tid), "COPY_TOKEN", verbose))
                     else:
                         new_hyp.update_ngrams(ngram_searcher.get_keys(
-                            new_hyp.get_ngrams(), tid, "GEN_TOKEN"))
+                            hyp.get_ngrams(), tid, "GEN_TOKEN", verbose))
+
+                    # look at parent timestep ?
+                    if tid == eos:
+                        new_hyp.to_move = True
+                    else:
+                        new_hyp.to_move = False
+
                     if log:
                         cand_copy_prob = cand_copy_probs[word_gen_hyp_id]
                         if cand_copy_prob > 0.5:
@@ -487,31 +499,51 @@ class Hyp_ng(Hyp):
         if isinstance(args[0], Hyp):
             self.hist_ng = copy.copy(args[0].hist_ng)
         else:
-            self.hist_ng = [[None for i in range(config.max_ngrams+1)]]
+            self.hist_ng = []
+        self.to_move = False
 
     def update_ngrams(self, new_ngram):
         # print new_ngram
         self.hist_ng.append(new_ngram)
 
-    def get_ngrams(self):
+    def get_ngrams(self, verbose=False):
+
         try:
-            t = self.get_action_parent_t()
-            # print t
-            # print len(self.hist_ng)
-            return self.hist_ng[t]
+            if self.to_move:
+                t = self.get_action_parent_t()
+            else:
+                t = self.t
+
+            k = self.hist_ng[t]
+            if verbose:
+                print self.to_move
+                print t
+                print len(self.hist_ng)
+                print self.tree.pretty_print()
+            return k
         except:
-            return self.hist_ng[0]
+            return [None for i in range(config.max_ngrams+1)]
 
 
-def update_probs(rule_prob, vocab_prob, copy_prob, hyp_samples, ngram_searcher):
+def update_probs(rule_prob, vocab_prob, copy_prob, hyp_samples, ngram_searcher, grammar=None):
     f = config.retrieval_factor
     # print f, type(f)
+
     for k, hyp in enumerate(hyp_samples):
-        ngram_keys = hyp.get_ngrams()
+        verbose = False
+        # if k == 0:
+        #     verbose = True
+        ngram_keys = hyp.get_ngrams(verbose)
+        # if k == 0:
+        #    print ngram_keys
         for value, score, flag in ngram_searcher(ngram_keys):
+
             if flag == "APPLY_RULE":
+                # if grammar is not None and k == 0:
+                #     print "candidate rule :"
+                #     print grammar.rules[value]
                 rule_prob[k, value] *= np.exp(f*score)
-            elif flag == "GEN_TOKEN" or flag == "GEN_COPY_TOKEN":
+            elif flag == "GEN_TOKEN":
                 vocab_prob[k, value] *= np.exp(f*score)
             else:
                 assert flag == "COPY_TOKEN"
