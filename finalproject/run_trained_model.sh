@@ -12,14 +12,14 @@ if [ "$1" == "hs" ]; then
 else
 	# django dataset
 	echo "run trained model for django"
-	dataset="../../files/django.cleaned.dataset.freq5.par_info.refact.space_only.bin"
+	dataset="../../files/aligned_django.bin"
 	model="model.django.npz"
 	commandline="-rule_embed_dim 128 -node_embed_dim 64"
 	datatype="django"
 fi
 
 # decode the test set and save the nbest decoding results
-THEANO_FLAGS="mode=FAST_RUN,device=${device},floatX=float32" python code_gen.py \
+THEANO_FLAGS="mode=FAST_RUN,device=${device},floatX=float32" python2 code_gen.py \
 -data_type ${datatype} \
 -data ${dataset} \
 -output_dir ${output} \

@@ -5,13 +5,15 @@ import os
 from nltk.translate.bleu_score import sentence_bleu, corpus_bleu, SmoothingFunction
 import logging
 import traceback
+import postprocess
 
 from nn.utils.generic_utils import init_logging
 
 from model import *
 from postprocess import process_class_names
 
-DJANGO_ANNOT_FILE = '/Users/yinpengcheng/Research/SemanticParsing/CodeGeneration/en-django/all.anno'
+#DJANGO_ANNOT_FILE = '/Users/yinpengcheng/Research/SemanticParsing/CodeGeneration/en-django/all.anno'
+DJANGO_ANNOT_FILE = 'all.anno'
 
 
 def tokenize_for_bleu_eval(code):
@@ -41,6 +43,7 @@ def evaluate(model, dataset, verbose=True):
             continue
 
         best_hyp = hyps[0]
+        print "best hyp: " + str(best_hyp)
         predict_rules = [dataset.grammar.id_to_rule[rid] for rid in best_hyp]
 
         assert len(predict_rules) > 0 and len(gold_rules) > 0
@@ -143,10 +146,18 @@ def evaluate_decode_results(dataset, decode_results, verbose=True):
         elif config.data_type == 'hs':
             ref_code_for_bleu = ref_code
             pred_code_for_bleu = code
+            #print pred_code_for_bleu
 
         # we apply Ling Wang's trick when evaluating BLEU scores
         refer_tokens_for_bleu = tokenize_for_bleu_eval(ref_code_for_bleu)
         pred_tokens_for_bleu = tokenize_for_bleu_eval(pred_code_for_bleu)
+        #print pred_tokens_for_bleu
+        #print str_pred_tokens
+        if config.data_type == 'hs':
+            str_pred_tokens = ' '.join(pred_tokens_for_bleu)
+            new_str = postprocess.process_class_names(str_pred_tokens)
+            #print new_str
+            pred_tokens_for_bleu = new_str.split(" ")
 
         pred_tokens_for_bleu = process_class_names(pred_tokens_for_bleu)
 
