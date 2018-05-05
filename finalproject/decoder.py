@@ -13,6 +13,7 @@ def decode_python_dataset(model, train_data, dev_data, test_data, dataset_type="
 
     decode_results = []
     cum_num = 0
+
     for example in dataset.examples:
 
         if retrieval:

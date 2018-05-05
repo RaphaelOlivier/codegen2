@@ -547,6 +547,7 @@ def update_probs(rule_prob, vocab_prob, copy_prob, hyp_samples, ngram_searcher, 
                 vocab_prob[k, value] *= np.exp(f*score)
             else:
                 assert flag == "COPY_TOKEN"
-                copy_prob[k, value] *= np.exp(f*score)
+                if value < config.max_query_length:
+                    copy_prob[k, value] *= np.exp(f*score)
 
     return rule_prob, vocab_prob, copy_prob

@@ -87,9 +87,18 @@ def align(first_sentence, second_sentence, matrix, print_flag, is_list):
             first_index_dict[first_index] = [word1, "NULL", same_words, None]
             second_index_dict[second_index] = [word1, "NULL", same_words, None]
             # print("--------------------")
+    # completing
+    for index in range(i):
+        second_index_dict[index] = ["NULL", second_sentence[index], False, None]
+    # or...
+    for index in range(j):
+        first_index_dict[index] = [first_sentence[index], "NULL", False, None]
 
     if print_flag:
+
         print "----- ALIGNMENT ---- "
+        print first_sentence
+        print second_sentence
         print reverse1[::-1]
         print reverse2[::-1]
         print "----- END OF ALIGNMENT ---- "

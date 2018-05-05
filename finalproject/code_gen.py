@@ -142,7 +142,6 @@ if __name__ == '__main__':
 
     logging.info('loading dataset [%s]', args.data)
     train_data, dev_data, test_data = deserialize_from_file(args.data)
-
     if not args.source_vocab_size:
         args.source_vocab_size = train_data.annot_vocab.size
     if not args.target_vocab_size:
