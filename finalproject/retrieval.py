@@ -120,8 +120,8 @@ def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, sim
     actions = aligned_entry.actions
     alignments = None
     print "retrieved id : %d" % aligned_entry.raw_id
-    print aligned_entry.query
-    print aligned_entry.parse_tree.pretty_print()
+    # print aligned_entry.query
+    # print aligned_entry.parse_tree.pretty_print()
     # print aligned_entry.actions
     if config.use_alignment:
         alignments = aligned_entry.alignments
@@ -143,7 +143,7 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
     if timestep >= min(len(act_sequence), len(actions)):
         return timestep
     target_w = Gram(entry_index, actions[timestep], act_sequence[timestep], simi_score)
-    print actions[timestep]
+    # print actions[timestep]
     if not use_alignment or alignments[timestep] in unedited_words.values():
         current_ngram_depth = min(current_ngram_depth+1, config.max_ngrams)
         for i in range(current_ngram_depth, 0, -1):
@@ -160,8 +160,8 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
     #    assert len(current_ngrams[i]) == i
 
     copy_timestep = timestep
-    print copy_timestep
-    print current_ngrams[1:3]
+    # print copy_timestep
+    # print current_ngrams[1:3]
     assert current_ngrams[2] == [
     ] or current_ngrams[2][0].action_type == 'APPLY_RULE' or current_ngrams[2][1].action_type != 'APPLY_RULE'
 
@@ -169,23 +169,23 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
         if node.children:
             for child in node.children:
                 if child.children or child.value is not None:
-                    print "parent %s to child %s" % (str(node.type), str(child.type))
+                    # print "parent %s to child %s" % (str(node.type), str(child.type))
                     timestep = aux_collect_ngrams(entry_index, actions, act_sequence, child, alignments, unedited_words, simi_score, ngrams,
                                                   copy.deepcopy(current_ngrams), current_ngram_depth, timestep+1, use_alignment)
-                    print copy_timestep, timestep
-                    print current_ngrams[1:3]
+                    # print copy_timestep, timestep
+                    # print current_ngrams[1:3]
         else:
             assert node.value is not None
 
             terminal_tokens = get_terminal_tokens(str(node.value))
-            print terminal_tokens
+            # print terminal_tokens
             if len(terminal_tokens) > 0:
                 timestep = aux_collect_ngrams(entry_index, actions, act_sequence, terminal_tokens[1:], alignments, unedited_words, simi_score, ngrams,
                                               copy.deepcopy(current_ngrams), current_ngram_depth, timestep+1, use_alignment)
-                print copy_timestep, timestep
-                print current_ngrams[1:3]
+                # print copy_timestep, timestep
+                # print current_ngrams[1:3]
     elif len(node) > 0:
-        print node
+        # print node
         timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node[1:], alignments, unedited_words, simi_score, ngrams,
                                       copy.deepcopy(current_ngrams), current_ngram_depth, timestep+1, use_alignment)
 
@@ -348,7 +348,7 @@ class NGramSearcher:
                     if eq:
                         self.ngram_follows[start_index[i]+j].append(start_index[i+1]+k)
         # for j in ngram_follows[0]:
-        #    print j, ngrams_lastelt_id[j], ngrams_lastelt_flag[j]
+        #    # print j, ngrams_lastelt_id[j], ngrams_lastelt_flag[j]
         # for i in range(start_index[2]):
         #     print self.ngrams_lastelt_id[i], self.ngrams_lastelt_flag[i]
 
@@ -390,5 +390,5 @@ if __name__ == "__main__":
     for ex in test_data.examples:
         input_sentence = ex.query
         l = retrieve_translation_pieces(train_data, input_sentence)
-        print len(l[4])
+        # print len(l[4])
         del l
