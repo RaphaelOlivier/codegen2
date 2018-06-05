@@ -28,6 +28,7 @@ ACTION_NAMES = {APPLY_RULE: 'APPLY_RULE',
                 COPY_TOKEN: 'COPY_TOKEN',
                 GEN_COPY_TOKEN: 'GEN_COPY_TOKEN'}
 
+
 class Action(object):
     def __init__(self, act_type, data):
         self.act_type = act_type
@@ -151,7 +152,8 @@ class DataEntry:
         return self._data
 
     def copy(self):
-        e = DataEntry(self.raw_id, self.query, self.parse_tree, self.code, self.actions, self.meta_data)
+        e = DataEntry(self.raw_id, self.query, self.parse_tree,
+                      self.code, self.actions, self.meta_data)
 
         return e
 
@@ -214,7 +216,6 @@ class DataSet:
 
         return data
 
-
     def init_data_matrices(self, max_query_length=70, max_example_action_num=100):
         logging.info('init data matrices for [%s] dataset', self.name)
         annot_vocab = self.annot_vocab
@@ -223,12 +224,18 @@ class DataSet:
         # np.max([len(e.query) for e in self.examples])
         # np.max([len(e.rules) for e in self.examples])
 
-        query_tokens = self.data_matrix['query_tokens'] = np.zeros((self.count, max_query_length), dtype='int32')
-        tgt_node_seq = self.data_matrix['tgt_node_seq'] = np.zeros((self.count, max_example_action_num), dtype='int32')
-        tgt_par_rule_seq = self.data_matrix['tgt_par_rule_seq'] = np.zeros((self.count, max_example_action_num), dtype='int32')
-        tgt_par_t_seq = self.data_matrix['tgt_par_t_seq'] = np.zeros((self.count, max_example_action_num), dtype='int32')
-        tgt_action_seq = self.data_matrix['tgt_action_seq'] = np.zeros((self.count, max_example_action_num, 3), dtype='int32')
-        tgt_action_seq_type = self.data_matrix['tgt_action_seq_type'] = np.zeros((self.count, max_example_action_num, 3), dtype='int32')
+        query_tokens = self.data_matrix['query_tokens'] = np.zeros(
+            (self.count, max_query_length), dtype='int32')
+        tgt_node_seq = self.data_matrix['tgt_node_seq'] = np.zeros(
+            (self.count, max_example_action_num), dtype='int32')
+        tgt_par_rule_seq = self.data_matrix['tgt_par_rule_seq'] = np.zeros(
+            (self.count, max_example_action_num), dtype='int32')
+        tgt_par_t_seq = self.data_matrix['tgt_par_t_seq'] = np.zeros(
+            (self.count, max_example_action_num), dtype='int32')
+        tgt_action_seq = self.data_matrix['tgt_action_seq'] = np.zeros(
+            (self.count, max_example_action_num, 3), dtype='int32')
+        tgt_action_seq_type = self.data_matrix['tgt_action_seq_type'] = np.zeros(
+            (self.count, max_example_action_num, 3), dtype='int32')
 
         for eid, example in enumerate(self.examples):
             exg_query_tokens = example.query[:max_query_length]
@@ -390,7 +397,8 @@ def parse_django_dataset():
     # grammar, all_parse_trees = extract_grammar(code_file)
 
     annot_tokens = list(chain(*[e['query_tokens'] for e in data]))
-    annot_vocab = gen_vocab(annot_tokens, vocab_size=5000, freq_cutoff=3) # gen_vocab(annot_tokens, vocab_size=5980)
+    # gen_vocab(annot_tokens, vocab_size=5980)
+    annot_vocab = gen_vocab(annot_tokens, vocab_size=5000, freq_cutoff=3)
 
     terminal_token_seq = []
     empty_actions_count = 0
@@ -488,7 +496,8 @@ def parse_django_dataset():
                     except ValueError:
                         pass
 
-                    d = {'literal': terminal_token, 'rule': rule, 'parent_rule': parent_rule, 'parent_t': parent_t}
+                    d = {'literal': terminal_token, 'rule': rule,
+                         'parent_rule': parent_rule, 'parent_t': parent_t}
 
                     # cannot copy, only generation
                     # could be unk!
@@ -508,7 +517,8 @@ def parse_django_dataset():
 
                     actions.append(action)
 
-                d = {'literal': '<eos>', 'rule': rule, 'parent_rule': parent_rule, 'parent_t': parent_t}
+                d = {'literal': '<eos>', 'rule': rule,
+                     'parent_rule': parent_rule, 'parent_t': parent_t}
                 actions.append(Action(GEN_TOKEN, d))
 
         if len(actions) == 0:
@@ -551,14 +561,15 @@ def parse_django_dataset():
 
     serialize_to_file((train_data, dev_data, test_data),
                       'data/django.cleaned.dataset.freq3.par_info.refact.space_only.order_by_ulink_len.bin')
-                      # 'data/django.cleaned.dataset.freq5.par_info.refact.space_only.unary_closure.freq{UNARY_CUTOFF_FREQ}.order_by_ulink_len.bin'.format(UNARY_CUTOFF_FREQ=UNARY_CUTOFF_FREQ))
+    # 'data/django.cleaned.dataset.freq5.par_info.refact.space_only.unary_closure.freq{UNARY_CUTOFF_FREQ}.order_by_ulink_len.bin'.format(UNARY_CUTOFF_FREQ=UNARY_CUTOFF_FREQ))
 
     return train_data, dev_data, test_data
 
 
 def check_terminals():
     from parse import parse_django, unescape
-    grammar, parse_trees = parse_django('/Users/yinpengcheng/Research/SemanticParsing/CodeGeneration/en-django/all.code')
+    grammar, parse_trees = parse_django(
+        '/Users/yinpengcheng/Research/SemanticParsing/CodeGeneration/en-django/all.code')
     annot_file = '/Users/yinpengcheng/Research/SemanticParsing/CodeGeneration/en-django/all.anno'
 
     unique_terminals = set()
@@ -663,7 +674,8 @@ def canonicalize_query(query):
 
 def canonicalize_example(query, code):
     from lang.py.parse import parse_raw, parse_tree_to_python_ast, canonicalize_code as make_it_compilable
-    import astor, ast
+    import astor
+    import ast
 
     canonical_query, str_map = canonicalize_query(query)
     canonical_code = code
@@ -680,7 +692,8 @@ def canonicalize_example(query, code):
     ast_tree = parse_tree_to_python_ast(parse_tree)
     source = astor.to_source(ast_tree)
 
-    assert gold_source == source, 'sanity check fails: gold=[%s], actual=[%s]' % (gold_source, source)
+    assert gold_source == source, 'sanity check fails: gold=[%s], actual=[%s]' % (
+        gold_source, source)
 
     query_tokens = canonical_query.split(' ')
 
@@ -783,7 +796,7 @@ def preprocess_dataset(annot_file, code_file):
     return examples
 
 
-if __name__== '__main__':
+if __name__ == '__main__':
     from nn.utils.generic_utils import init_logging
     init_logging('parse.log')
 

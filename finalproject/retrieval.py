@@ -23,16 +23,29 @@ ACTION_NAMES = {APPLY_RULE: 'APPLY_RULE',
 
 
 def get_terminal_tokens(_terminal_str):
-    """
-    get terminal tokens
-    break words like MinionCards into [Minion, Cards]
-    """
-    tmp_terminal_tokens = [t for t in _terminal_str.split(' ') if len(t) > 0]
+    mode = config.data_type
+    if mode == "hs":
+        """
+        get terminal tokens
+        break words like MinionCards into [Minion, Cards]
+        """
+
+        tmp_terminal_tokens = [t for t in _terminal_str.split(' ') if len(t) > 0]
+        _terminal_tokens = []
+        for token in tmp_terminal_tokens:
+            sub_tokens = re.sub(r'([a-z])([A-Z])', r'\1 \2', token).split(' ')
+            _terminal_tokens.extend(sub_tokens)
+
+            _terminal_tokens.append(' ')
+
+        return _terminal_tokens[:-1]
+
+    assert mode == "django"
+    tmp_terminal_tokens = _terminal_str.split(' ')
     _terminal_tokens = []
     for token in tmp_terminal_tokens:
-        sub_tokens = re.sub(r'([a-z])([A-Z])', r'\1 \2', token).split(' ')
-        _terminal_tokens.extend(sub_tokens)
-
+        if token:
+            _terminal_tokens.append(token)
         _terminal_tokens.append(' ')
 
     return _terminal_tokens[:-1]
@@ -107,6 +120,9 @@ def collect_ngrams(aligned_entry, entry_index, act_sequence, unedited_words, sim
     actions = aligned_entry.actions
     alignments = None
     print "retrieved id : %d" % aligned_entry.raw_id
+    print aligned_entry.query
+    print aligned_entry.parse_tree.pretty_print()
+    # print aligned_entry.actions
     if config.use_alignment:
         alignments = aligned_entry.alignments
     # for i in range(min(len(aligned_entry.alignments), len(actions))):
@@ -127,6 +143,7 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
     if timestep >= min(len(act_sequence), len(actions)):
         return timestep
     target_w = Gram(entry_index, actions[timestep], act_sequence[timestep], simi_score)
+    print actions[timestep]
     if not use_alignment or alignments[timestep] in unedited_words.values():
         current_ngram_depth = min(current_ngram_depth+1, config.max_ngrams)
         for i in range(current_ngram_depth, 0, -1):
@@ -143,8 +160,8 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
     #    assert len(current_ngrams[i]) == i
 
     copy_timestep = timestep
-    # print copy_timestep
-    # print current_ngrams[1:3]
+    print copy_timestep
+    print current_ngrams[1:3]
     assert current_ngrams[2] == [
     ] or current_ngrams[2][0].action_type == 'APPLY_RULE' or current_ngrams[2][1].action_type != 'APPLY_RULE'
 
@@ -152,22 +169,23 @@ def aux_collect_ngrams(entry_index, actions, act_sequence, node, alignments, une
         if node.children:
             for child in node.children:
                 if child.children or child.value is not None:
-                    # print "parent %s to child %s" % (str(node.type), str(child.type))
+                    print "parent %s to child %s" % (str(node.type), str(child.type))
                     timestep = aux_collect_ngrams(entry_index, actions, act_sequence, child, alignments, unedited_words, simi_score, ngrams,
                                                   copy.deepcopy(current_ngrams), current_ngram_depth, timestep+1, use_alignment)
-                    # print copy_timestep, timestep
-                    # print current_ngrams[1:3]
+                    print copy_timestep, timestep
+                    print current_ngrams[1:3]
         else:
             assert node.value is not None
 
             terminal_tokens = get_terminal_tokens(str(node.value))
-            # print terminal_tokens
-            timestep = aux_collect_ngrams(entry_index, actions, act_sequence, terminal_tokens[1:], alignments, unedited_words, simi_score, ngrams,
-                                          copy.deepcopy(current_ngrams), current_ngram_depth, timestep+1, use_alignment)
-            # print copy_timestep, timestep
-            # print current_ngrams[1:3]
+            print terminal_tokens
+            if len(terminal_tokens) > 0:
+                timestep = aux_collect_ngrams(entry_index, actions, act_sequence, terminal_tokens[1:], alignments, unedited_words, simi_score, ngrams,
+                                              copy.deepcopy(current_ngrams), current_ngram_depth, timestep+1, use_alignment)
+                print copy_timestep, timestep
+                print current_ngrams[1:3]
     elif len(node) > 0:
-        # print node
+        print node
         timestep = aux_collect_ngrams(entry_index, actions, act_sequence, node[1:], alignments, unedited_words, simi_score, ngrams,
                                       copy.deepcopy(current_ngrams), current_ngram_depth, timestep+1, use_alignment)
 
