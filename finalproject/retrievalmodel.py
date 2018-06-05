@@ -549,5 +549,8 @@ def update_probs(rule_prob, vocab_prob, copy_prob, hyp_samples, ngram_searcher, 
                 assert flag == "COPY_TOKEN"
                 if value < config.max_query_length:
                     copy_prob[k, value] *= np.exp(f*score)
+        rule_prob[k] /= rule_prob[k].sum()
+        vocab_prob[k] /= vocab_prob[k].sum()
+        copy_prob[k] /= copy_prob[k].sum()
 
     return rule_prob, vocab_prob, copy_prob

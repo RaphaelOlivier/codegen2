@@ -7,14 +7,14 @@ if [ "$1" == "hs" ]; then
 	echo "run trained model for hs"
 	dataset="../../files/aligned_hs.bin"
 	model="model.hs.npz"
-	commandline="-decode_max_time_step 750 -rule_embed_dim 128 -node_embed_dim 64 -enable_retrieval -retrieval_factor 0.1 -max_retrieved_sentences 5"
+	commandline="-decode_max_time_step 750 -rule_embed_dim 128 -node_embed_dim 64 -enable_retrieval -retrieval_factor 3 -max_retrieved_sentences 3"
 	datatype="hs"
 else
 	# django dataset
 	echo "run trained model for django"
 	dataset="../../files/django.cleaned.dataset.freq5.par_info.refact.space_only.bin"
 	model="model.django.npz"
-	commandline="-rule_embed_dim 128 -node_embed_dim 64 -enable_retrieval -retrieval_factor 0.1 -max_retrieved_sentences 10"
+	commandline="-rule_embed_dim 128 -node_embed_dim 64 -enable_retrieval -retrieval_factor 2.5 -max_retrieved_sentences 10"
 	datatype="django"
 fi
 

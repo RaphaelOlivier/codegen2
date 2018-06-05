@@ -15,7 +15,7 @@ def decode_python_dataset(model, train_data, dev_data, test_data, dataset_type="
     cum_num = 0
 
     for example in dataset.examples:
-
+        print 'raw_id: %d' % example.raw_id
         if retrieval:
             ngrams = retrieve_translation_pieces(train_data, example)
             cand_list = model.decode_with_retrieval(example, dataset.grammar, dataset.terminal_vocab, ngrams,

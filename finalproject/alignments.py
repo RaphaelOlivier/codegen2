@@ -38,8 +38,8 @@ class AlignedEntry(DataEntry):
 
             # print example.actions
             # print example.parse_tree.pretty_print()
-            if not (len(alignments) == len(self.actions)):
-                print(self.raw_id, len(self.actions), len(alignments))
+            # if not (len(alignments) == len(self.actions)):
+            #    print(self.raw_id, len(self.actions), len(alignments))
             self.alignments = alignments
 
     def copy(self):
@@ -51,7 +51,7 @@ def score_to_alignments(scores):
     # print scores.shape, scores.mean(axis=1).shape
     # print "without normalization"
     # print np.argmax(scores, axis=1)[:45]
-    # scores = scores - scores.mean(axis=0)
+    scores = scores - scores.mean(axis=0)
     al = np.argmax(scores, axis=1)
     # print "with normalization"
     # print al[:45]

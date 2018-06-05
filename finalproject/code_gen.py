@@ -77,7 +77,10 @@ parser.set_defaults(enable_copy=True)
 parser.add_argument('-enable_retrieval', dest='enable_retrieval', action='store_true')
 parser.add_argument('-no_retrieval', dest='enable_retrieval', action='store_false')
 parser.set_defaults(enable_retrieval=False)
-parser.add_argument('-max_ngrams', default=4)
+parser.add_argument('-use_alignment', dest='use_alignment', action='store_true')
+parser.add_argument('-no_alignment', dest='use_alignment', action='store_false')
+parser.set_defaults(use_alignment=False)
+parser.add_argument('-max_ngrams', default=4, type=int)
 parser.add_argument('-retrieval_factor', default=0.1, type=float)
 parser.add_argument('-max_retrieved_sentences', default=10, type=int)
 
@@ -155,7 +158,10 @@ if __name__ == '__main__':
     config_module = sys.modules['config']
     for name, value in vars(args).iteritems():
         setattr(config_module, name, value)
-
+    with open("config.py", 'a') as f:
+        for name, value in vars(args).iteritems():
+            quote = '\"'if isinstance(value, str) else ''
+            f.write(name+" = "+quote+str(value)+quote+'\n')
     # get dataset statistics
     avg_action_num = np.average([len(e.actions) for e in train_data.examples])
     logging.info('avg_action_num: %d', avg_action_num)

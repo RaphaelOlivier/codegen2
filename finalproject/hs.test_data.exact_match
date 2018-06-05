@@ -54,6 +54,18 @@ class StormwindKnight(MinionCard):
         return Minion(2, 5, charge=True)
 ------------------------------------------------------------
 ------------------------------------------------------------
+example_id: 612
+class VoodooDoctor(MinionCard):
+
+    def __init__(self):
+        super().__init__('Voodoo Doctor', 1, CHARACTER_CLASS.ALL,
+            CARD_RARITY.FREE, battlecry=Battlecry(Heal(2),
+            CharacterSelector(players=BothPlayer(), picker=UserPicker())))
+
+    def create_minion(self, player):
+        return Minion(2, 1)
+------------------------------------------------------------
+------------------------------------------------------------
 example_id: 613
 class WrathOfAirTotem(MinionCard):
 
@@ -132,4 +144,4 @@ class ThrallmarFarseer(MinionCard):
     def create_minion(self, player):
         return Minion(2, 3, windfury=True)
 ------------------------------------------------------------
-599, 606, 609, 610, 611, 613, 616, 630, 643, 644, 646, 658
+599, 606, 609, 610, 611, 612, 613, 616, 630, 643, 644, 646, 658
